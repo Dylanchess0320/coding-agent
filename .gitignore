@@ -72,5 +72,4 @@ log/
 /_*.py
 /_diag_*.txt
 nul
-/*.exe
 installers/

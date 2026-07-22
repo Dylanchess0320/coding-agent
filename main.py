@@ -27,8 +27,60 @@ from ui import ui  # noqa: E402
 from model_resolver import resolve_model, invalidate_cache  # noqa: E402
 
 
+_PROVIDER_DISPLAY_NAMES = {
+    "deepseek": "DeepSeek",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "google": "Google",
+    "ollama": "Ollama",
+}
+
+
+def _prompt_and_save_api_key(env_var: str, provider_name: str) -> str:
+    """Interactively prompt the user for an API key and persist it to .env."""
+    ui.warn(f"No API key found for {provider_name}.")
+    print(f"  Paste your {provider_name} API key below (or press Enter to cancel):")
+    print(f"    {env_var}= ", end="")
+    key = sys.stdin.readline().strip()
+    if not key:
+        ui.error("No key provided -- cannot continue without an API key.")
+        sys.exit(1)
+
+    env_path = PROJECT_DIR / ".env"
+    if env_path.exists():
+        lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    else:
+        lines = []
+
+    key_prefix = f"{env_var}="
+    replaced = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(key_prefix) and not stripped.startswith("#"):
+            new_lines.append(f"{env_var}={key}\n")
+            replaced = True
+        else:
+            new_lines.append(line)
+
+    if not replaced:
+        if new_lines and not new_lines[-1].strip() == "":
+            new_lines.append("\n")
+        new_lines.append(f"# {provider_name}\n")
+        new_lines.append(f"{env_var}={key}\n")
+
+    env_path.write_text("".join(new_lines), encoding="utf-8")
+    os.environ[env_var] = key
+    ui.success(f"Saved {env_var} to .env  (available now -- no restart needed)")
+    return key
+
+
 def _resolve_provider(provider_hint: str | None, model_name: str) -> dict:
-    """Build an LLMConfig for the requested provider+model."""
+    """Build an LLMConfig for the requested provider+model.
+
+    If a required API key is missing and we are in an interactive terminal,
+    the user will be prompted to enter one.
+    """
     cfg = get_config()
 
     # Map provider names to their alias + env vars
@@ -42,6 +94,12 @@ def _resolve_provider(provider_hint: str | None, model_name: str) -> dict:
     if provider_hint and provider_hint in provider_map:
         env_key, env_base, env_model = provider_map[provider_hint]
         api_key = os.environ.get(env_key, "") if env_key else ""
+        # If a key-required provider is selected and key is missing, prompt interactively
+        if env_key and not api_key and sys.stdin.isatty():
+            api_key = _prompt_and_save_api_key(
+                env_key,
+                _PROVIDER_DISPLAY_NAMES.get(provider_hint, provider_hint),
+            )
         base_url = os.environ.get(env_base, "")
         resolved_model = model_name or os.environ.get(env_model, "")
         if not resolved_model:
@@ -63,6 +121,8 @@ def _resolve_provider(provider_hint: str | None, model_name: str) -> dict:
 
     # Default: DeepSeek current config
     api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("CODING_AGENT_API_KEY", "")
+    if not api_key and sys.stdin.isatty():
+        api_key = _prompt_and_save_api_key("DEEPSEEK_API_KEY", "DeepSeek")
     return {
         "api_key": api_key,
         "base_url": cfg.get("base_url", "https://api.deepseek.com/v1"),
@@ -334,10 +394,18 @@ Environment:
 
     # Validate API key
     if not cfg["api_key"] or cfg["api_key"] == "sk-your-api-key-here":
-        ui.error("DEEPSEEK_API_KEY not set.")
-        print(f"  Set it in {PROJECT_DIR / '.env'} or as an environment variable.")
-        print(f"  Get a key: https://platform.deepseek.com/api_keys")
-        sys.exit(1)
+        if one_shot:
+            # One-shot mode -- cannot interact; exit with instructions
+            ui.error("DEEPSEEK_API_KEY not set.")
+            print(f"  Set it in {PROJECT_DIR / '.env'} or as an environment variable.")
+            print(f"  Get a key: https://platform.deepseek.com/api_keys")
+            sys.exit(1)
+        else:
+            # REPL mode -- prompt the user interactively
+            _prompt_and_save_api_key("DEEPSEEK_API_KEY", "DeepSeek")
+            # Re-resolve config with the new key and model
+            cfg = get_config()
+            model = cfg["model"]
 
     # Create agent
     agent = CodingAgent(
