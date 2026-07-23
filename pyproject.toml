@@ -75,6 +75,7 @@ all = [
 [tool.setuptools.packages.find]
 include = [
     "luckyd_code*",
+    "core*",
     "tools*",
     "llm*",
     "memory*",

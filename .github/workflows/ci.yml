@@ -108,7 +108,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          pytest -v \
+          PYTHONPATH="${{ github.workspace }}" pytest -v \
             --cov=tools \
             --cov=llm \
             --cov=memory \
