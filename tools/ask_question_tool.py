@@ -30,13 +30,23 @@ class AskUserQuestionTool(ToolBase):
                         "items": {
                             "type": "object",
                             "properties": {
-                                "label": {"type": "string", "description": "Short display text (1-5 words)"},
-                                "description": {"type": "string", "description": "Explanation of what this option means"},
+                                "label": {
+                                    "type": "string",
+                                    "description": "Short display text (1-5 words)",
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "Explanation of what this option means",
+                                },
                             },
                             "required": ["label", "description"],
                         },
                     },
-                    "multi_select": {"type": "boolean", "description": "Allow multiple selections", "default": False},
+                    "multi_select": {
+                        "type": "boolean",
+                        "description": "Allow multiple selections",
+                        "default": False,
+                    },
                 },
                 "required": ["question", "header", "options"],
             },
@@ -53,9 +63,9 @@ class AskUserQuestionTool(ToolBase):
             lines.append(f"{'='*50}")
             for j, opt in enumerate(q.get("options", [])):
                 lines.append(f"  [{j+1}] {opt['label']} — {opt['description']}")
-            lines.append(f"  [0] Custom answer")
+            lines.append("  [0] Custom answer")
 
-        lines.append(f"\nReply with your choices (e.g. '1,3' or 'all' or custom text).")
+        lines.append("\nReply with your choices (e.g. '1,3' or 'all' or custom text).")
 
         return ToolOutput(
             text="\n".join(lines),

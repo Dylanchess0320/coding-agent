@@ -10,10 +10,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from config import TASKS_DIR
+
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
-
-from config import TASKS_DIR
 
 
 def _tasks_file() -> Path:
@@ -40,16 +40,30 @@ class TaskCreateTool(ToolBase):
     aliases = ["NewTask", "AddTask"]
     parameters = {
         "subject": {"type": "string", "description": "Short title for the task"},
-        "description": {"type": "string", "description": "What needs to be done — include context, acceptance criteria, etc."},
+        "description": {
+            "type": "string",
+            "description": "What needs to be done — include context, acceptance criteria, etc.",
+        },
         "priority": {"type": "string", "description": "Task priority: low, normal, high, critical"},
-        "tags": {"type": "array", "description": "Free-form tags for filtering", "items": {"type": "string"}},
-        "blocked_by": {"type": "array", "description": "List of task IDs this task is blocked by", "items": {"type": "string"}},
+        "tags": {
+            "type": "array",
+            "description": "Free-form tags for filtering",
+            "items": {"type": "string"},
+        },
+        "blocked_by": {
+            "type": "array",
+            "description": "List of task IDs this task is blocked by",
+            "items": {"type": "string"},
+        },
     }
 
     async def execute(
-        self, subject: str, description: str = "",
-        priority: str = "normal", tags: list = None,
-        blocked_by: list = None,
+        self,
+        subject: str,
+        description: str = "",
+        priority: str = "normal",
+        tags: list | None = None,
+        blocked_by: list | None = None,
     ) -> ToolOutput:
         tasks = _load_tasks()
         task_id = f"task_{uuid.uuid4().hex[:8]}"
@@ -89,12 +103,19 @@ class TaskUpdateTool(ToolBase):
         },
         "subject": {"type": "string", "description": "New subject/title (optional)"},
         "description": {"type": "string", "description": "Updated description (optional)"},
-        "output": {"type": "string", "description": "Result or output text to attach to the task (optional)"},
+        "output": {
+            "type": "string",
+            "description": "Result or output text to attach to the task (optional)",
+        },
     }
 
     async def execute(
-        self, task_id: str, status: str = "",
-        subject: str = "", description: str = "", output: str = "",
+        self,
+        task_id: str,
+        status: str = "",
+        subject: str = "",
+        description: str = "",
+        output: str = "",
     ) -> ToolOutput:
         tasks = _load_tasks()
         now = datetime.now(timezone.utc).isoformat()
@@ -138,7 +159,9 @@ class TaskGetTool(ToolBase):
                     text += f"\nBlocked by: {', '.join(t['blocked_by'])}\n"
                 if t.get("output"):
                     text += f"\nOutput:\n{t['output'][:2000]}\n"
-                text += f"\nCreated: {t.get('created_at', '?')} | Updated: {t.get('updated_at', '?')}"
+                text += (
+                    f"\nCreated: {t.get('created_at', '?')} | Updated: {t.get('updated_at', '?')}"
+                )
                 return ToolOutput(
                     text=text,
                     title=f"Task: {t['subject']}",
@@ -166,14 +189,22 @@ class TaskListTool(ToolBase):
         if status and status != "all":
             filtered = [t for t in filtered if t.get("status") == status]
         if tag:
-            filtered = [t for t in filtered if tag.lower() in [x.lower() for x in t.get("tags", [])]]
+            filtered = [
+                t for t in filtered if tag.lower() in [x.lower() for x in t.get("tags", [])]
+            ]
 
         if not filtered:
             return ToolOutput(text="No tasks found.", title="Tasks (0)")
-        
+
         lines = []
         for t in filtered:
-            emoji = {"pending": "○", "in_progress": "◉", "completed": "✓", "blocked": "⊘", "cancelled": "✗"}.get(t.get("status", ""), "?")
+            emoji = {
+                "pending": "○",
+                "in_progress": "◉",
+                "completed": "✓",
+                "blocked": "⊘",
+                "cancelled": "✗",
+            }.get(t.get("status", ""), "?")
             lines.append(f"  {emoji} [{t['id']}] {t['subject']} ({t.get('priority', 'normal')})")
             if t.get("description"):
                 lines.append(f"      {t['description'][:100]}")
@@ -191,7 +222,10 @@ class TaskStopTool(ToolBase):
     aliases = ["CancelTask", "DeleteTask"]
     parameters = {
         "task_id": {"type": "string", "description": "The ID of the task to stop"},
-        "action": {"type": "string", "description": "'cancel' keeps the task with cancelled status; 'delete' removes it"},
+        "action": {
+            "type": "string",
+            "description": "'cancel' keeps the task with cancelled status; 'delete' removes it",
+        },
         "reason": {"type": "string", "description": "Optional reason for cancellation"},
     }
 

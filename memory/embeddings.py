@@ -15,7 +15,11 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from onnxruntime import InferenceSession
+    from transformers import AutoTokenizer
 
 
 # ── Constants ──────────────────────────────────────────────────────────
@@ -23,8 +27,7 @@ from typing import Optional
 MODEL_ID = "all-MiniLM-L6-v2"
 MODEL_FILENAME = "all-MiniLM-L6-v2.onnx"
 MODEL_URL = (
-    "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/"
-    "onnx/model.onnx"
+    "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/" "onnx/model.onnx"
 )
 EXPECTED_HASH = None  # Optional: verify with hashlib.sha256
 DIM = 384  # Embedding vector length for this model
@@ -33,6 +36,7 @@ MAX_BATCH = 64  # Encode up to this many entries per batch
 
 # Where the ONNX model file lives
 from config import MEMORY_DIR
+
 MODEL_DIR = Path(MEMORY_DIR) / "embedding_model"
 MODEL_PATH = MODEL_DIR / MODEL_FILENAME
 
@@ -40,8 +44,8 @@ MODEL_PATH = MODEL_DIR / MODEL_FILENAME
 # ── Availability check ─────────────────────────────────────────────────
 
 _onnx_available: bool | None = None
-_session: Optional["InferenceSession"] = None  # type: ignore[name-defined]
-_tokenizer: Optional["AutoTokenizer"] = None  # type: ignore[name-defined]
+_session: InferenceSession | None = None  # type: ignore[name-defined]
+_tokenizer: AutoTokenizer | None = None  # type: ignore[name-defined]
 
 
 def is_available() -> bool:
@@ -51,8 +55,8 @@ def is_available() -> bool:
         return _onnx_available
 
     try:
-        import onnxruntime as ort  # noqa: F401
-        from transformers import AutoTokenizer  # noqa: F401
+        import onnxruntime as ort
+        from transformers import AutoTokenizer
 
         # Lazy-load model (download if missing)
         if not MODEL_PATH.exists():
@@ -80,6 +84,7 @@ def _download_model() -> None:
 
 # ── Token pooling ──────────────────────────────────────────────────────
 
+
 def _mean_pool(token_embeddings, attention_mask):
     """Average pool token embeddings weighted by attention mask."""
     # Expand mask to same shape as embeddings [batch, seq, dim]
@@ -92,12 +97,14 @@ def _mean_pool(token_embeddings, attention_mask):
 def _l2_normalize(vectors):
     """L2-normalize each row in-place."""
     import numpy as np
+
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     norms = np.maximum(norms, 1e-12)
     return vectors / norms
 
 
 # ── Batch encoding ─────────────────────────────────────────────────────
+
 
 def encode(texts: list[str], batch_size: int = MAX_BATCH) -> list[list[float]]:
     """Encode a list of texts into embedding vectors. Returns list of float lists.
@@ -126,8 +133,9 @@ def encode(texts: list[str], batch_size: int = MAX_BATCH) -> list[list[float]]:
         inputs = {
             "input_ids": tokens["input_ids"].numpy(),
             "attention_mask": tokens["attention_mask"].numpy(),
-            "token_type_ids": tokens.get("token_type_ids",
-                np.zeros_like(tokens["input_ids"].numpy())),
+            "token_type_ids": tokens.get(
+                "token_type_ids", np.zeros_like(tokens["input_ids"].numpy())
+            ),
         }
         outputs = _session.run(None, inputs)  # Usually outputs[0] is the tensor
 
@@ -136,10 +144,7 @@ def encode(texts: list[str], batch_size: int = MAX_BATCH) -> list[list[float]]:
         attention = tokens["attention_mask"]
         pooled = _mean_pool(token_embeds, attention)
 
-        if NORMALIZE:
-            pooled_np = _l2_normalize(pooled.numpy())
-        else:
-            pooled_np = pooled.numpy()
+        pooled_np = _l2_normalize(pooled.numpy()) if NORMALIZE else pooled.numpy()
 
         all_embeddings.append(pooled_np)
 
@@ -152,11 +157,12 @@ def encode(texts: list[str], batch_size: int = MAX_BATCH) -> list[list[float]]:
 
 # ── Cosine similarity ──────────────────────────────────────────────────
 
+
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
     """Cosine similarity between two float lists."""
     if not vec_a or not vec_b or len(vec_a) != len(vec_b):
         return 0.0
-    dot = sum(a * b for a, b in zip(vec_a, vec_b))
+    dot = sum(a * b for a, b in zip(vec_a, vec_b, strict=False))
     norm_a = math.sqrt(sum(a * a for a in vec_a))
     norm_b = math.sqrt(sum(b * b for b in vec_b))
     if norm_a < 1e-12 or norm_b < 1e-12:
@@ -165,6 +171,7 @@ def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
 
 
 # ── Memory graph integration ───────────────────────────────────────────
+
 
 def embed_all_memories(graph) -> int:
     """Find all unembedded memories, batch-encode them, and update in-place.
@@ -186,14 +193,14 @@ def embed_all_memories(graph) -> int:
     if not unembedded:
         return 0
 
-    ids, texts = zip(*unembedded)
+    ids, texts = zip(*unembedded, strict=False)
     embeddings = encode(list(texts))
 
     if not embeddings:
         return 0
 
     count = 0
-    for mem_id, emb in zip(ids, embeddings):
+    for mem_id, emb in zip(ids, embeddings, strict=False):
         entry = graph.memories.get(mem_id)
         if entry is not None:
             entry.embedding = emb

@@ -5,6 +5,7 @@ Navigate, click, type, screenshot, and control a headless browser.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 from pathlib import Path
@@ -13,8 +14,8 @@ from typing import Any
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
 
-
 # ── Singleton browser session ──────────────────────────────────────────
+
 
 class BrowserSession:
     """Persistent Playwright browser session shared across tools."""
@@ -31,6 +32,7 @@ class BrowserSession:
     def _ensure_playwright(self):
         if self._playwright is None:
             from playwright.sync_api import sync_playwright
+
             self._playwright = sync_playwright().start()
         return self._playwright
 
@@ -75,7 +77,8 @@ class BrowserSession:
     def snapshot(self) -> str:
         page = self._ensure_page()
         # Build a text representation of the page
-        result = page.evaluate("""
+        result = page.evaluate(
+            """
             () => {
                 const elements = [];
                 const all = document.querySelectorAll(
@@ -92,7 +95,8 @@ class BrowserSession:
                 }
                 return { title: document.title, url: location.href, elements };
             }
-        """)
+        """
+        )
         lines = [f"Title: {result['title']}", f"URL: {result['url']}", ""]
         for el in result["elements"][:100]:
             label = el["text"] or el["placeholder"]
@@ -116,31 +120,23 @@ class BrowserSession:
 
     def close(self):
         if self._page:
-            try:
+            with contextlib.suppress(Exception):
                 self._page.close()
-            except Exception:
-                pass
             self._page = None
         if self._context:
-            try:
+            with contextlib.suppress(Exception):
                 self._context.close()
-            except Exception:
-                pass
             self._context = None
 
     def close_all(self):
         self.close()
         if self._browser:
-            try:
+            with contextlib.suppress(Exception):
                 self._browser.close()
-            except Exception:
-                pass
             self._browser = None
         if self._playwright:
-            try:
+            with contextlib.suppress(Exception):
                 self._playwright.stop()
-            except Exception:
-                pass
             self._playwright = None
 
     def toggle_headless(self, headless: bool):
@@ -151,6 +147,7 @@ class BrowserSession:
     def emulate(self, device_name: str = "", width: int = 0, height: int = 0):
         if device_name and device_name != "desktop":
             from playwright.sync_api import devices as pw_devices
+
             if hasattr(pw_devices, device_name):
                 self._device = getattr(pw_devices, device_name)
             else:
@@ -191,6 +188,7 @@ _session = BrowserSession()
 
 
 # ── Tool classes ───────────────────────────────────────────────────────
+
 
 class BrowserNavigateTool(ToolBase):
     name = "BrowserNavigate"
@@ -257,7 +255,9 @@ class BrowserTypeTool(ToolBase):
 
 class BrowserSnapshotTool(ToolBase):
     name = "BrowserSnapshot"
-    description = "Get a text snapshot of the current page (interactive elements, headings, links, etc.)."
+    description = (
+        "Get a text snapshot of the current page (interactive elements, headings, links, etc.)."
+    )
     aliases = ["Snapshot", "PageSnapshot", "PageText"]
     parameters = {}
 
@@ -277,8 +277,14 @@ class BrowserScreenshotTool(ToolBase):
     description = "Take a screenshot of the current page and save it to a file."
     aliases = ["Screenshot", "PageScreenshot", "CapturePage"]
     parameters = {
-        "path": {"type": "string", "description": "File path to save the screenshot (default: auto-generated in working dir)"},
-        "full_page": {"type": "boolean", "description": "Capture full scrollable page (default: false)"},
+        "path": {
+            "type": "string",
+            "description": "File path to save the screenshot (default: auto-generated in working dir)",
+        },
+        "full_page": {
+            "type": "boolean",
+            "description": "Capture full scrollable page (default: false)",
+        },
     }
 
     def execute(self, path: str = "", full_page: bool = False) -> ToolOutput:
@@ -334,6 +340,7 @@ class OpenInBrowserTool(ToolBase):
 
     def execute(self, url: str) -> ToolOutput:
         import webbrowser
+
         webbrowser.open(url)
         return ToolOutput(text=f"Opened in your browser: {url}", title="URL Opened")
 
@@ -343,7 +350,10 @@ class BrowserStateTool(ToolBase):
     description = "Save or clear persistent browser state (cookies, localStorage)."
     aliases = ["Cookies", "LocalStorage"]
     parameters = {
-        "action": {"type": "string", "description": "Action: 'save' persists current state, 'clear' wipes stored state"},
+        "action": {
+            "type": "string",
+            "description": "Action: 'save' persists current state, 'clear' wipes stored state",
+        },
     }
 
     def execute(self, action: str) -> ToolOutput:
@@ -353,6 +363,7 @@ class BrowserStateTool(ToolBase):
                 state_path = Path(os.getcwd()) / ".browser_state.json"
                 storage = page.context.storage_state()
                 import json
+
                 state_path.write_text(json.dumps(storage, indent=2))
                 return ToolOutput(
                     text=f"Browser state saved to {state_path}",
@@ -366,7 +377,9 @@ class BrowserStateTool(ToolBase):
                 page.context.clear_cookies()
                 return ToolOutput(text="Browser state cleared.", title="State Cleared")
             else:
-                return ToolOutput(text=f"Unknown action: {action}. Use 'save' or 'clear'.", error=True)
+                return ToolOutput(
+                    text=f"Unknown action: {action}. Use 'save' or 'clear'.", error=True
+                )
         except Exception as e:
             return ToolOutput(text=f"State error: {e}", error=True)
 
@@ -376,16 +389,25 @@ class BrowserEmulateTool(ToolBase):
     description = "Emulate a mobile device or set a custom viewport."
     aliases = ["Emulate", "DeviceEmulate", "MobileEmulate"]
     parameters = {
-        "device": {"type": "string", "description": "Device name to emulate (e.g., 'iPhone 12', 'Pixel 5') or 'desktop' to reset."},
-        "width": {"type": "integer", "description": "Custom viewport width (optional, used if device is not set)."},
-        "height": {"type": "integer", "description": "Custom viewport height (optional, used if device is not set)."},
+        "device": {
+            "type": "string",
+            "description": "Device name to emulate (e.g., 'iPhone 12', 'Pixel 5') or 'desktop' to reset.",
+        },
+        "width": {
+            "type": "integer",
+            "description": "Custom viewport width (optional, used if device is not set).",
+        },
+        "height": {
+            "type": "integer",
+            "description": "Custom viewport height (optional, used if device is not set).",
+        },
     }
 
     def execute(self, device: str = "", width: int = 0, height: int = 0) -> ToolOutput:
         try:
             _session.emulate(device, width, height)
             return ToolOutput(
-                text=f"Emulating: {device or f'{width}x{height}' or 'desktop'}",
+                text=f"Emulating: {device or f'{width}x{height}'}",
                 title="Device Emulated",
             )
         except Exception as e:
@@ -397,9 +419,18 @@ class BrowserInterceptTool(ToolBase):
     description = "Intercept network requests on the current page."
     aliases = ["Intercept", "NetworkMock", "BlockURL"]
     parameters = {
-        "action": {"type": "string", "description": "Action: 'list' requests, 'mock' URLs, or 'clear' intercepts."},
-        "url_pattern": {"type": "string", "description": "Glob pattern for URLs to intercept (e.g., '**/*.png')."},
-        "status": {"type": "integer", "description": "HTTP status code for mocked response (default: 200, or 204 for block)."},
+        "action": {
+            "type": "string",
+            "description": "Action: 'list' requests, 'mock' URLs, or 'clear' intercepts.",
+        },
+        "url_pattern": {
+            "type": "string",
+            "description": "Glob pattern for URLs to intercept (e.g., '**/*.png').",
+        },
+        "status": {
+            "type": "integer",
+            "description": "HTTP status code for mocked response (default: 200, or 204 for block).",
+        },
     }
 
     def execute(self, action: str, url_pattern: str = "", status: int = 200) -> ToolOutput:
@@ -451,7 +482,9 @@ class BrowserTraceTool(ToolBase):
                     metadata={"path": trace_path, "size": size},
                 )
             else:
-                return ToolOutput(text=f"Unknown action: {action}. Use 'start' or 'stop'.", error=True)
+                return ToolOutput(
+                    text=f"Unknown action: {action}. Use 'start' or 'stop'.", error=True
+                )
         except Exception as e:
             return ToolOutput(text=f"Trace error: {e}", error=True)
 
@@ -461,7 +494,10 @@ class BrowserToggleHeadlessTool(ToolBase):
     description = "Toggle the browser between headless (invisible) and headed (visible) mode."
     aliases = ["ToggleHeadless", "Headless", "ShowBrowser", "HideBrowser"]
     parameters = {
-        "headless": {"type": "boolean", "description": "True for headless (default), False for visible browser window."},
+        "headless": {
+            "type": "boolean",
+            "description": "True for headless (default), False for visible browser window.",
+        },
     }
 
     def execute(self, headless: bool) -> ToolOutput:
@@ -474,6 +510,7 @@ class BrowserToggleHeadlessTool(ToolBase):
 
 
 # ── Register all tools ─────────────────────────────────────────────────
+
 
 def register_all(reg=None):
     mapping = [

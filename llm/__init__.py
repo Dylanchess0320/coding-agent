@@ -1,4 +1,5 @@
 """Multi-LLM provider system — core types, cost tracking, and provider factory."""
+
 from __future__ import annotations
 
 import os
@@ -7,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 # ── Configuration ────────────────────────────────────────────────────
+
 
 @dataclass
 class LLMConfig:
@@ -45,7 +47,9 @@ class LLMConfig:
         if explicit == "google" or (not explicit and os.environ.get("GOOGLE_API_KEY")):
             return cls(
                 api_key=os.environ["GOOGLE_API_KEY"],
-                base_url=os.environ.get("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
+                base_url=os.environ.get(
+                    "GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
+                ),
                 model=os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash"),
                 provider="google",
                 temperature=float(os.environ.get("CODING_AGENT_TEMP", "0.0")),
@@ -80,6 +84,7 @@ class LLMConfig:
 
         # Fallback: DeepSeek (original default)
         from config import get_config
+
         cfg = get_config()
         return cls(
             api_key=cfg["api_key"],
@@ -92,6 +97,7 @@ class LLMConfig:
 
 
 # ── Common result types ──────────────────────────────────────────────
+
 
 @dataclass
 class LLMResult:
@@ -184,6 +190,7 @@ class CostTracker:
 
 # ── Base client ──────────────────────────────────────────────────────
 
+
 class LLMClient(ABC):
     """Abstract base for all LLM providers."""
 
@@ -192,8 +199,7 @@ class LLMClient(ABC):
         self.cost_tracker = CostTracker()
 
     @abstractmethod
-    async def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResult:
-        ...
+    async def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResult: ...
 
     @abstractmethod
     async def chat_stream(
@@ -202,8 +208,7 @@ class LLMClient(ABC):
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
         on_think: Callable[[str], None] | None = None,
-    ) -> LLMResult:
-        ...
+    ) -> LLMResult: ...
 
     @staticmethod
     def create(config: LLMConfig | None = None) -> LLMClient:
@@ -213,25 +218,32 @@ class LLMClient(ABC):
 
         if config.provider == "openai":
             from .openai_client import OpenAIClient
+
             return OpenAIClient(config)
         elif config.provider == "anthropic":
             from .anthropic_client import AnthropicClient
+
             return AnthropicClient(config)
         elif config.provider == "google":
             from .google_client import GoogleClient
+
             return GoogleClient(config)
         elif config.provider == "ollama":
             from .ollama_client import OllamaClient
+
             return OllamaClient(config)
         elif config.provider == "zai" or config.provider == "openrouter":
             from .openai_client import OpenAIClient
+
             return OpenAIClient(config)
         else:
             from .deepseek_client import DeepSeekClient
+
             return DeepSeekClient(config)
 
 
 # ── Provider Router ──────────────────────────────────────────────────
+
 
 class ProviderRouter:
     """Routes between providers. Allows mid-session switching."""

@@ -6,13 +6,11 @@ Enables swarm/team collaboration patterns.
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from datetime import datetime, timezone
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
-
 
 # ── Global agent/team registry in memory ──
 
@@ -37,27 +35,33 @@ def _send_message(to: str, from_agent: str, message: str, message_type: str = "t
     if to == "*":
         for agent_id in _message_inboxes:
             if agent_id != from_agent:
-                _message_inboxes.setdefault(agent_id, []).append({
-                    "from": from_agent,
-                    "message": message,
-                    "type": message_type,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
+                _message_inboxes.setdefault(agent_id, []).append(
+                    {
+                        "from": from_agent,
+                        "message": message,
+                        "type": message_type,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
         return True
     if to in _message_inboxes:
-        _message_inboxes[to].append({
+        _message_inboxes[to].append(
+            {
+                "from": from_agent,
+                "message": message,
+                "type": message_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        return True
+    _message_inboxes[to] = [
+        {
             "from": from_agent,
             "message": message,
             "type": message_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-        return True
-    _message_inboxes[to] = [{
-        "from": from_agent,
-        "message": message,
-        "type": message_type,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }]
+        }
+    ]
     return True
 
 
@@ -101,7 +105,7 @@ class AgentHandoffTool(ToolBase):
         }
 
         prompt = role_prompts.get(role, "") + f"\n\nTask: {task}"
-        
+
         try:
             result = await sub.run(prompt, max_turns=min(sub.max_turns, 15))
             return ToolOutput(
@@ -120,7 +124,10 @@ class TeamCreateTool(ToolBase):
     description = "Create a multi-agent swarm team that works in parallel. Each agent gets a name, role, and task. They run simultaneously."
     aliases = ["Swarm", "ParallelAgents"]
     parameters = {
-        "team_name": {"type": "string", "description": "Short name for this team (e.g. 'feature-x-team')"},
+        "team_name": {
+            "type": "string",
+            "description": "Short name for this team (e.g. 'feature-x-team')",
+        },
         "description": {"type": "string", "description": "What this team is building/doing"},
         "agents": {
             "type": "array",
@@ -129,15 +136,23 @@ class TeamCreateTool(ToolBase):
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Agent handle (e.g. 'backend-dev')"},
-                    "role": {"type": "string", "description": "Agent specialty (e.g. 'Python backend developer')"},
-                    "task": {"type": "string", "description": "Detailed task. Be specific — include files, functions, acceptance criteria."},
+                    "role": {
+                        "type": "string",
+                        "description": "Agent specialty (e.g. 'Python backend developer')",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Detailed task. Be specific — include files, functions, acceptance criteria.",
+                    },
                 },
                 "required": ["name", "role", "task"],
             },
         },
     }
 
-    async def execute(self, team_name: str, description: str = "", agents: list = None) -> ToolOutput:
+    async def execute(
+        self, team_name: str, description: str = "", agents: list | None = None
+    ) -> ToolOutput:
         if not agents:
             return ToolOutput(text="Must provide at least one agent", error=True)
 
@@ -151,6 +166,7 @@ class TeamCreateTool(ToolBase):
 
         from agent import CodingAgent
         from config import get_config
+
         cfg = get_config()
 
         async def _run_agent(agent_def: dict) -> str:
@@ -193,7 +209,10 @@ class SendMessageTool(ToolBase):
     parameters = {
         "to": {"type": "string", "description": "Recipient agent name, or '*' for broadcast"},
         "message": {"type": "string", "description": "The message content"},
-        "message_type": {"type": "string", "description": "Type: text, shutdown_request, shutdown_response, status_update"},
+        "message_type": {
+            "type": "string",
+            "description": "Type: text, shutdown_request, shutdown_response, status_update",
+        },
     }
 
     async def execute(self, to: str, message: str, message_type: str = "text") -> ToolOutput:
@@ -219,13 +238,13 @@ class ReceiveMessageTool(ToolBase):
         msgs = _message_inboxes.pop(agent_name, [])
         if not msgs:
             return ToolOutput(text="No pending messages.", title="Inbox (0)")
-        
+
         lines = []
         for i, m in enumerate(msgs):
             lines.append(f"  [{i}] From: {m['from']} | Type: {m['type']}")
             lines.append(f"      {m['message']}")
             lines.append("")
-        
+
         return ToolOutput(
             text="\n".join(lines),
             title=f"Inbox ({len(msgs)} messages)",
@@ -253,7 +272,7 @@ class ListAgentsTool(ToolBase):
 
         return ToolOutput(
             text="\n".join(lines),
-            title=f"Known Agents & Teams",
+            title="Known Agents & Teams",
             metadata={"agents": len(_agents), "teams": len(_teams)},
         )
 

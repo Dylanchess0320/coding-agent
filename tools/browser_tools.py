@@ -5,7 +5,7 @@ evaluate JS, emulate devices, intercept requests, trace sessions, and more.
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import json
 import os
 import re
@@ -14,7 +14,6 @@ from pathlib import Path
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
-
 
 # ── Browser session state ──────────────────────────────────────────────
 
@@ -31,11 +30,12 @@ async def _get_playwright():
     if _playwright is None:
         try:
             from playwright.async_api import async_playwright
+
             _playwright = async_playwright
         except ImportError:
             raise RuntimeError(
                 "Playwright not installed. Run: pip install playwright && playwright install chromium"
-            )
+            ) from None
     return _playwright
 
 
@@ -60,20 +60,17 @@ async def _restart_browser():
     """Close and reopen the browser (needed for mode/viewport changes)."""
     global _browser, _page
     if _page:
-        try:
+        with contextlib.suppress(Exception):
             await _page.close()
-        except Exception:
-            pass
     if _browser:
-        try:
+        with contextlib.suppress(Exception):
             await _browser.close()
-        except Exception:
-            pass
     _page = None
     _browser = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
+
 
 def _extract_text_from_html(html: str) -> str:
     """Simple HTML-to-text extraction for snapshots."""
@@ -90,6 +87,7 @@ def _extract_text_from_html(html: str) -> str:
 
 # ── Tool: Navigate ─────────────────────────────────────────────────────
 
+
 class BrowserNavigateTool(ToolBase):
     name = "BrowserNavigate"
     description = "Navigate the browser to a URL. Returns page title and summary of elements."
@@ -104,8 +102,9 @@ class BrowserNavigateTool(ToolBase):
             await page.goto(url, timeout=30000)
             title = await page.title()
             html = await page.content()
-            text = _extract_text_from_html(html)
-            elements = await page.evaluate("""() => {
+            _extract_text_from_html(html)
+            elements = await page.evaluate(
+                """() => {
                 const items = [];
                 document.querySelectorAll('a, button, input, select, textarea').forEach((el, i) => {
                     if (i > 100) return;
@@ -117,10 +116,15 @@ class BrowserNavigateTool(ToolBase):
                     items.push({tag, txt, id, cls, href});
                 });
                 return items;
-            }""")
+            }"""
+            )
             summary = f"Page: {title}\nURL: {url}\n\nInteractive elements ({len(elements)}):\n"
-            for i, el in enumerate(elements[:50]):
-                sel = f"#{el['id']}" if el["id"] else f".{el['cls'].split()[0]}" if el["cls"] else el["tag"]
+            for _i, el in enumerate(elements[:50]):
+                sel = (
+                    f"#{el['id']}"
+                    if el["id"]
+                    else f".{el['cls'].split()[0]}" if el["cls"] else el["tag"]
+                )
                 summary += f"  [{el['tag']}] {el['txt'][:50]}  {sel}\n"
                 if el.get("href"):
                     summary += f"       href: {el['href'][:80]}\n"
@@ -134,6 +138,7 @@ class BrowserNavigateTool(ToolBase):
 
 
 # ── Tool: Click ────────────────────────────────────────────────────────
+
 
 class BrowserClickTool(ToolBase):
     name = "BrowserClick"
@@ -158,6 +163,7 @@ class BrowserClickTool(ToolBase):
 
 
 # ── Tool: Type ─────────────────────────────────────────────────────────
+
 
 class BrowserTypeTool(ToolBase):
     name = "BrowserType"
@@ -186,9 +192,12 @@ class BrowserTypeTool(ToolBase):
 
 # ── Tool: Snapshot ────────────────────────────────────────────────────
 
+
 class BrowserSnapshotTool(ToolBase):
     name = "BrowserSnapshot"
-    description = "Get a text snapshot of the current page (interactive elements, headings, links, etc.)."
+    description = (
+        "Get a text snapshot of the current page (interactive elements, headings, links, etc.)."
+    )
     aliases = ["Snapshot", "PageContent"]
     parameters = {}
 
@@ -210,6 +219,7 @@ class BrowserSnapshotTool(ToolBase):
 
 # ── Tool: Screenshot ──────────────────────────────────────────────────
 
+
 class BrowserScreenshotTool(ToolBase):
     name = "BrowserScreenshot"
     description = "Take a screenshot of the current page and save it to a file."
@@ -219,7 +229,10 @@ class BrowserScreenshotTool(ToolBase):
             "type": "string",
             "description": "File path to save the screenshot (default: auto-generated in working dir)",
         },
-        "full_page": {"type": "boolean", "description": "Capture full scrollable page (default: false)"},
+        "full_page": {
+            "type": "boolean",
+            "description": "Capture full scrollable page (default: false)",
+        },
     }
 
     async def execute(self, path: str = "", full_page: bool = False) -> ToolOutput:
@@ -239,6 +252,7 @@ class BrowserScreenshotTool(ToolBase):
 
 
 # ── Tool: Evaluate JS ──────────────────────────────────────────────────
+
 
 class BrowserEvaluateTool(ToolBase):
     name = "BrowserEvaluate"
@@ -264,6 +278,7 @@ class BrowserEvaluateTool(ToolBase):
 
 # ── Tool: Close ────────────────────────────────────────────────────────
 
+
 class BrowserCloseTool(ToolBase):
     name = "BrowserClose"
     description = "Close the browser session."
@@ -286,6 +301,7 @@ class BrowserCloseTool(ToolBase):
 
 # ── NEW: Open In System Browser ────────────────────────────────────────
 
+
 class OpenInBrowserTool(ToolBase):
     name = "OpenInBrowser"
     description = (
@@ -300,6 +316,7 @@ class OpenInBrowserTool(ToolBase):
 
     async def execute(self, url: str) -> ToolOutput:
         import webbrowser
+
         webbrowser.open(url)
         return ToolOutput(
             text=f"Opened in your browser: {url}",
@@ -308,6 +325,7 @@ class OpenInBrowserTool(ToolBase):
 
 
 # ── NEW: Browser State (cookies / localStorage) ──────────────────────
+
 
 class BrowserStateTool(ToolBase):
     name = "BrowserState"
@@ -351,7 +369,7 @@ class BrowserStateTool(ToolBase):
                 page = await _get_page()
                 await page.context.add_cookies(data.get("cookies", []))
                 # Apply origins
-                for origin_data in data.get("origins", []):
+                for _origin_data in data.get("origins", []):
                     pass  # Playwright handles origins via storage_state
                 return ToolOutput(
                     text="Browser state loaded.",
@@ -379,6 +397,7 @@ class BrowserStateTool(ToolBase):
 
 
 # ── NEW: Device / Viewport Emulation ──────────────────────────────────
+
 
 class BrowserEmulateTool(ToolBase):
     name = "BrowserEmulate"
@@ -409,6 +428,7 @@ class BrowserEmulateTool(ToolBase):
         try:
             if device and device.lower() != "desktop":
                 from playwright.async_api import devices as pw_devices
+
                 device_name = None
                 # Try exact match first
                 if device in dir(pw_devices):
@@ -417,10 +437,9 @@ class BrowserEmulateTool(ToolBase):
                     # Fuzzy match
                     dlow = device.lower()
                     for name in dir(pw_devices):
-                        if not name.startswith("_"):
-                            if dlow in name.lower():
-                                device_name = name
-                                break
+                        if not name.startswith("_") and dlow in name.lower():
+                            device_name = name
+                            break
                 if device_name:
                     _device_config = getattr(pw_devices, device_name)
                 else:
@@ -434,7 +453,7 @@ class BrowserEmulateTool(ToolBase):
                 _device_config = None  # reset
 
             await _restart_browser()
-            label = device or f"{width}x{height}" or "desktop"
+            label = device or f"{width}x{height}"
             return ToolOutput(
                 text=f"Emulating: {label}",
                 title="Device Emulated",
@@ -444,6 +463,7 @@ class BrowserEmulateTool(ToolBase):
 
 
 # ── NEW: Network Interception ─────────────────────────────────────────
+
 
 class BrowserInterceptTool(ToolBase):
     name = "BrowserIntercept"
@@ -481,8 +501,7 @@ class BrowserInterceptTool(ToolBase):
                         metadata={"intercepts": []},
                     )
                 lines = "\n".join(
-                    f"  {i['url_pattern']} → {i.get('status', 200)}"
-                    for i in _intercepts
+                    f"  {i['url_pattern']} → {i.get('status', 200)}" for i in _intercepts
                 )
                 return ToolOutput(
                     text=f"Active intercepts:\n{lines}",
@@ -613,17 +632,17 @@ register_tool(BrowserToggleHeadlessTool())
 # Export helpers
 # ---------------------------------------------------------------------------
 __all__ = [
-    "BrowserNavigateTool",
     "BrowserClickTool",
-    "BrowserTypeTool",
-    "BrowserSnapshotTool",
-    "BrowserScreenshotTool",
-    "BrowserEvaluateTool",
     "BrowserCloseTool",
-    "OpenInBrowserTool",
-    "BrowserStateTool",
     "BrowserEmulateTool",
+    "BrowserEvaluateTool",
     "BrowserInterceptTool",
-    "BrowserTraceTool",
+    "BrowserNavigateTool",
+    "BrowserScreenshotTool",
+    "BrowserSnapshotTool",
+    "BrowserStateTool",
     "BrowserToggleHeadlessTool",
+    "BrowserTraceTool",
+    "BrowserTypeTool",
+    "OpenInBrowserTool",
 ]

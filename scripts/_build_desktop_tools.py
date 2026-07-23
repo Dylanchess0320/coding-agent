@@ -1,4 +1,3 @@
-
 """
 Desktop automation tools - screen capture, mouse, keyboard, window control.
 Like Claude Computer Use but for your actual desktop.
@@ -6,9 +5,7 @@ Like Claude Computer Use but for your actual desktop.
 
 from __future__ import annotations
 
-import os
 import time
-import asyncio
 from pathlib import Path
 
 from .base import ToolBase, ToolOutput
@@ -20,27 +17,39 @@ class DesktopScreenshotTool(ToolBase):
     description = "Capture the full desktop screen and save to a file."
     aliases = ["ScreenShot", "CaptureScreen", "DesktopCapture"]
     parameters = {
-        "path": {"type": "string", "description": "File path to save the screenshot (default: auto-generated)"},
-        "region": {"type": "string", "description": "Region as 'x,y,w,h' or 'full' for full screen (default: full)"},
+        "path": {
+            "type": "string",
+            "description": "File path to save the screenshot (default: auto-generated)",
+        },
+        "region": {
+            "type": "string",
+            "description": "Region as 'x,y,w,h' or 'full' for full screen (default: full)",
+        },
     }
 
     def execute(self, path: str = "", region: str = "full") -> ToolOutput:
         try:
             import mss
+
             if not path:
                 path = f"desktop_{int(time.time())}.png"
-            
+
             with mss.mss() as sct:
                 if region == "full":
                     sct.shot(output=path)
                 else:
                     parts = [int(x.strip()) for x in region.split(",")]
                     if len(parts) == 4:
-                        monitor = {"top": parts[1], "left": parts[0], "width": parts[2], "height": parts[3]}
+                        monitor = {
+                            "top": parts[1],
+                            "left": parts[0],
+                            "width": parts[2],
+                            "height": parts[3],
+                        }
                         sct.shot(output=path, region=monitor)
                     else:
                         return ToolOutput(text="Region must be 'x,y,w,h' or 'full'", error=True)
-            
+
             size = Path(path).stat().st_size
             return ToolOutput(
                 text=f"Screenshot saved: {path} ({size:,} bytes)",
@@ -56,19 +65,34 @@ class DesktopMouseTool(ToolBase):
     description = "Control the mouse: move, click, double-click, right-click, drag."
     aliases = ["Mouse", "MouseControl"]
     parameters = {
-        "action": {"type": "string", "description": "Action: move, click, dblclick, rightclick, mousedown, mouseup, drag"},
+        "action": {
+            "type": "string",
+            "description": "Action: move, click, dblclick, rightclick, mousedown, mouseup, drag",
+        },
         "x": {"type": "integer", "description": "X coordinate (pixels)"},
         "y": {"type": "integer", "description": "Y coordinate (pixels)"},
         "to_x": {"type": "integer", "description": "Target X for drag action"},
         "to_y": {"type": "integer", "description": "Target Y for drag action"},
-        "duration": {"type": "number", "description": "Movement duration in seconds (default: 0.2)"},
+        "duration": {
+            "type": "number",
+            "description": "Movement duration in seconds (default: 0.2)",
+        },
     }
 
-    def execute(self, action: str, x: int = 0, y: int = 0, to_x: int = 0, to_y: int = 0, duration: float = 0.2) -> ToolOutput:
+    def execute(
+        self,
+        action: str,
+        x: int = 0,
+        y: int = 0,
+        to_x: int = 0,
+        to_y: int = 0,
+        duration: float = 0.2,
+    ) -> ToolOutput:
         try:
             import pyautogui
+
             pyautogui.FAILSAFE = True
-            
+
             if action == "move":
                 pyautogui.moveTo(x, y, duration=duration)
                 return ToolOutput(text=f"Mouse moved to ({x}, {y})", title="Mouse Move")
@@ -90,7 +114,9 @@ class DesktopMouseTool(ToolBase):
             elif action == "drag":
                 pyautogui.moveTo(x, y, duration=duration)
                 pyautogui.drag(to_x - x, to_y - y, duration=duration)
-                return ToolOutput(text=f"Dragged from ({x},{y}) to ({to_x},{to_y})", title="Mouse Drag")
+                return ToolOutput(
+                    text=f"Dragged from ({x},{y}) to ({to_x},{to_y})", title="Mouse Drag"
+                )
             else:
                 return ToolOutput(text=f"Unknown action: {action}", error=True)
         except Exception as e:
@@ -103,13 +129,17 @@ class DesktopKeyboardTool(ToolBase):
     aliases = ["Keyboard", "TypeText", "PressKey"]
     parameters = {
         "action": {"type": "string", "description": "Action: type, press, hotkey"},
-        "text": {"type": "string", "description": "Text to type, key to press, or combo for hotkey (e.g. 'ctrl+c')"},
+        "text": {
+            "type": "string",
+            "description": "Text to type, key to press, or combo for hotkey (e.g. 'ctrl+c')",
+        },
         "interval": {"type": "number", "description": "Seconds between keystrokes (default: 0.05)"},
     }
 
     def execute(self, action: str, text: str = "", interval: float = 0.05) -> ToolOutput:
         try:
             import pyautogui
+
             if action == "type":
                 pyautogui.typewrite(text, interval=interval)
                 preview = text[:50] + ("..." if len(text) > 50 else "")
@@ -132,13 +162,20 @@ class DesktopPositionTool(ToolBase):
     description = "Get current mouse position, screen size, or locate an image on screen."
     aliases = ["MousePos", "ScreenSize"]
     parameters = {
-        "query": {"type": "string", "description": "What to query: position, size, or locate (find an image on screen)"},
-        "image_path": {"type": "string", "description": "Path to image to locate on screen (for query=locate)"},
+        "query": {
+            "type": "string",
+            "description": "What to query: position, size, or locate (find an image on screen)",
+        },
+        "image_path": {
+            "type": "string",
+            "description": "Path to image to locate on screen (for query=locate)",
+        },
     }
 
     def execute(self, query: str = "position", image_path: str = "") -> ToolOutput:
         try:
             import pyautogui
+
             if query == "position":
                 x, y = pyautogui.position()
                 return ToolOutput(
@@ -162,11 +199,18 @@ class DesktopPositionTool(ToolBase):
                         return ToolOutput(
                             text=f"Found: left={loc.left}, top={loc.top}, w={loc.width}, h={loc.height}, center=({cx},{cy})",
                             title="Image Found",
-                            metadata={"left": loc.left, "top": loc.top, "width": loc.width, "height": loc.height},
+                            metadata={
+                                "left": loc.left,
+                                "top": loc.top,
+                                "width": loc.width,
+                                "height": loc.height,
+                            },
                         )
                     return ToolOutput(text="Image not found on screen", title="Not Found")
                 except Exception as e:
-                    return ToolOutput(text=f"Locate failed: {e}. Install: pip install opencv-python", error=True)
+                    return ToolOutput(
+                        text=f"Locate failed: {e}. Install: pip install opencv-python", error=True
+                    )
             else:
                 return ToolOutput(text=f"Unknown query: {query}", error=True)
         except Exception as e:
@@ -178,17 +222,25 @@ class DesktopWindowTool(ToolBase):
     description = "List, focus, or manipulate desktop windows."
     aliases = ["Window", "Windows"]
     parameters = {
-        "action": {"type": "string", "description": "Action: list, focus, minimize, maximize, close, geometry"},
+        "action": {
+            "type": "string",
+            "description": "Action: list, focus, minimize, maximize, close, geometry",
+        },
         "title": {"type": "string", "description": "Window title to match (partial match)"},
     }
 
     def execute(self, action: str = "list", title: str = "") -> ToolOutput:
         try:
             import pygetwindow as gw
+
             if action == "list":
                 windows = gw.getAllWindows()
-                visible = [(w.title, w.left, w.top, w.width, w.height) for w in windows if w.title.strip()]
-                lines = [f"  {t[:60]} @ ({l},{tp}) {wd}x{h}" for t, l, tp, wd, h in visible[:30]]
+                visible = [
+                    (w.title, w.left, w.top, w.width, w.height) for w in windows if w.title.strip()
+                ]
+                lines = [
+                    f"  {t[:60]} @ ({left},{tp}) {wd}x{h}" for t, left, tp, wd, h in visible[:30]
+                ]
                 return ToolOutput(
                     text=f"{len(visible)} windows:\n" + "\n".join(lines),
                     title="Windows",
@@ -227,7 +279,7 @@ class DesktopWindowTool(ToolBase):
                     )
                 return ToolOutput(text=f"No window matching '{title}'", error=True)
             else:
-                return ToolOutput(text=f"Unknown action or missing title", error=True)
+                return ToolOutput(text="Unknown action or missing title", error=True)
         except Exception as e:
             return ToolOutput(text=f"Window error: {e}", error=True)
 
@@ -237,13 +289,17 @@ class DesktopClipboardTool(ToolBase):
     description = "Read or write the system clipboard."
     aliases = ["Clipboard", "Copy", "Paste"]
     parameters = {
-        "action": {"type": "string", "description": "Action: read (get clipboard), write (set clipboard)"},
+        "action": {
+            "type": "string",
+            "description": "Action: read (get clipboard), write (set clipboard)",
+        },
         "text": {"type": "string", "description": "Text to write to clipboard (for action=write)"},
     }
 
     def execute(self, action: str = "read", text: str = "") -> ToolOutput:
         try:
             import pyperclip
+
             if action == "read":
                 content = pyperclip.paste()
                 return ToolOutput(
@@ -252,7 +308,9 @@ class DesktopClipboardTool(ToolBase):
                 )
             elif action == "write":
                 pyperclip.copy(text)
-                return ToolOutput(text=f"Written to clipboard ({len(text)} chars)", title="Clipboard Written")
+                return ToolOutput(
+                    text=f"Written to clipboard ({len(text)} chars)", title="Clipboard Written"
+                )
             else:
                 return ToolOutput(text=f"Unknown action: {action}", error=True)
         except Exception as e:

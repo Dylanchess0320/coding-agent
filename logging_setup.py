@@ -19,29 +19,30 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import os
 import re
 import sys
 import time
-import logging
-import contextlib
-from pathlib import Path
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-from typing import Any, Iterator
+from pathlib import Path
+from typing import Any
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 LOG_DIR = PROJECT_DIR / "logs"
 
 # ── Sensitive data patterns ──────────────────────────────────────────
 SENSITIVE_PATTERNS = [
-    (r'(api_key["\']?\s*[:=]\s*["\'])([^"\']+)(["\'])', r'\1***REDACTED***\3'),
-    (r'(sk-[a-zA-Z0-9]{20,})', 'sk-***REDACTED***'),
-    (r'(Bearer\s+)[a-zA-Z0-9._-]+', r'\1***REDACTED***'),
-    (r'(Authorization:\s*)[a-zA-Z0-9._-]+', r'\1***REDACTED***'),
-    (r'(password["\']?\s*[:=]\s*["\'])([^"\']+)(["\'])', r'\1***REDACTED***'),
-    (r'(token["\']?\s*[:=]\s*["\'])([^"\']+)(["\'])', r'\1***REDACTED***'),
+    (r'(api_key["\']?\s*[:=]\s*["\'])([^"\']+)(["\'])', r"\1***REDACTED***\3"),
+    (r"(sk-[a-zA-Z0-9]{20,})", "sk-***REDACTED***"),
+    (r"(Bearer\s+)[a-zA-Z0-9._-]+", r"\1***REDACTED***"),
+    (r"(Authorization:\s*)[a-zA-Z0-9._-]+", r"\1***REDACTED***"),
+    (r'(password["\']?\s*[:=]\s*["\'])([^"\']+)(["\'])', r"\1***REDACTED***"),
+    (r'(token["\']?\s*[:=]\s*["\'])([^"\']+)(["\'])', r"\1***REDACTED***"),
 ]
 
 # ── JSON Formatter (production) ──────────────────────────────────────────
@@ -141,7 +142,13 @@ class AgentLogger:
             self._logger.log(
                 level,
                 f"[TIMER] {operation} completed in {elapsed:.3f}s",
-                extra={"extra": {"operation": operation, "duration_ms": round(elapsed * 1000, 1), **extra}},
+                extra={
+                    "extra": {
+                        "operation": operation,
+                        "duration_ms": round(elapsed * 1000, 1),
+                        **extra,
+                    }
+                },
             )
 
     def timed(self, level: int = logging.INFO, **extra: Any):
@@ -152,6 +159,7 @@ class AgentLogger:
             async def my_function():
                 ...
         """
+
         def decorator(func):
             import functools
 
@@ -166,6 +174,7 @@ class AgentLogger:
                     return func(*args, **kwargs)
 
             import asyncio
+
             if asyncio.iscoroutinefunction(func):
                 return async_wrapper
             return sync_wrapper
@@ -257,7 +266,9 @@ def set_correlation_id(correlation_id: str) -> None:
         _root_logger.addFilter(CorrelationFilter(correlation_id))
 
 
-def configure(level: str = "INFO", log_format: str = "readable", log_file: str | None = None) -> None:
+def configure(
+    level: str = "INFO", log_format: str = "readable", log_file: str | None = None
+) -> None:
     """Explicitly configure logging (overrides defaults).
 
     Args:
@@ -280,7 +291,6 @@ def configure(level: str = "INFO", log_format: str = "readable", log_file: str |
     _initialized = False
     get_logger("root")
 
-
     def format(self, record: logging.LogRecord) -> str:
         message = record.getMessage()
         if self.redact:
@@ -291,7 +301,6 @@ def configure(level: str = "INFO", log_format: str = "readable", log_file: str |
             color = self.COLORS.get(level, "")
             return f"{color}{timestamp} {level:<8} {record.name:<20}{self.RESET} {message}"
         return f"{timestamp} {level:<8} {record.name:<20} {message}"
-
 
 
 def redact_sensitive(text: str) -> str:

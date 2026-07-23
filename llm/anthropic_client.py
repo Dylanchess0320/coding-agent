@@ -1,10 +1,12 @@
 """Anthropic Claude API client with streaming."""
+
 from __future__ import annotations
 
 import json
+
 import httpx
 
-from . import LLMClient, LLMConfig, LLMResult
+from . import LLMClient, LLMResult
 
 
 class AnthropicClient(LLMClient):
@@ -32,7 +34,8 @@ class AnthropicClient(LLMClient):
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 f"{self.config.base_url}/messages",
-                headers=headers, json=body,
+                headers=headers,
+                json=body,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -91,42 +94,48 @@ class AnthropicClient(LLMClient):
         tool_calls = []
 
         timeout = httpx.Timeout(connect=15.0, read=300.0, write=15.0, pool=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST", f"{self.config.base_url}/messages",
-                headers=headers, json=body,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data = json.loads(line[6:])
-                    etype = data.get("type", "")
-                    if etype == "content_block_delta":
-                        delta = data.get("delta", {})
-                        if delta.get("type") == "text_delta":
-                            text = delta.get("text", "")
-                            content_buf += text
-                            if on_token:
-                                on_token(text)
-                    elif etype == "content_block_start":
-                        block = data.get("content_block", {})
-                        if block.get("type") == "tool_use":
-                            tool_calls.append({
+        async with (
+            httpx.AsyncClient(timeout=timeout) as client,
+            client.stream(
+                "POST",
+                f"{self.config.base_url}/messages",
+                headers=headers,
+                json=body,
+            ) as resp,
+        ):
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = json.loads(line[6:])
+                etype = data.get("type", "")
+                if etype == "content_block_delta":
+                    delta = data.get("delta", {})
+                    if delta.get("type") == "text_delta":
+                        text = delta.get("text", "")
+                        content_buf += text
+                        if on_token:
+                            on_token(text)
+                elif etype == "content_block_start":
+                    block = data.get("content_block", {})
+                    if block.get("type") == "tool_use":
+                        tool_calls.append(
+                            {
                                 "id": block.get("id", ""),
                                 "type": "function",
                                 "function": {"name": block.get("name", ""), "arguments": ""},
-                            })
-                    elif etype == "message_delta":
-                        delta = data.get("delta", {})
-                        if delta.get("stop_reason"):
-                            result.finish_reason = delta["stop_reason"]
-                        usage = data.get("usage", {})
-                        if usage:
-                            self.cost_tracker.add_usage(usage, self.config.model)
-                            result.usage = usage
-                    elif etype == "message_stop":
-                        break
+                            }
+                        )
+                elif etype == "message_delta":
+                    delta = data.get("delta", {})
+                    if delta.get("stop_reason"):
+                        result.finish_reason = delta["stop_reason"]
+                    usage = data.get("usage", {})
+                    if usage:
+                        self.cost_tracker.add_usage(usage, self.config.model)
+                        result.usage = usage
+                elif etype == "message_stop":
+                    break
 
         result.content = content_buf
         result.tool_calls = tool_calls if tool_calls else None
@@ -142,14 +151,18 @@ class AnthropicClient(LLMClient):
             if role == "system":
                 system += content + "\n"
             elif role == "tool":
-                claude_msgs.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": m.get("tool_call_id", ""),
-                        "content": content or "ok",
-                    }],
-                })
+                claude_msgs.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": m.get("tool_call_id", ""),
+                                "content": content or "ok",
+                            }
+                        ],
+                    }
+                )
             elif role == "assistant":
                 msg = {"role": "assistant", "content": []}
                 if content:
@@ -160,12 +173,14 @@ class AnthropicClient(LLMClient):
                         if not isinstance(call, dict) or "function" not in call:
                             continue
                         fn = call.get("function", {})
-                        msg["content"].append({
-                            "type": "tool_use",
-                            "id": call.get("id", ""),
-                            "name": fn.get("name", ""),
-                            "input": json.loads(fn.get("arguments", "{}")),
-                        })
+                        msg["content"].append(
+                            {
+                                "type": "tool_use",
+                                "id": call.get("id", ""),
+                                "name": fn.get("name", ""),
+                                "input": json.loads(fn.get("arguments", "{}")),
+                            }
+                        )
                 claude_msgs.append(msg)
             else:
                 claude_msgs.append({"role": role, "content": content})
@@ -176,10 +191,11 @@ class AnthropicClient(LLMClient):
         claude_tools = []
         for t in tools:
             fn = t.get("function", t)
-            claude_tools.append({
-                "name": fn.get("name", ""),
-                "description": fn.get("description", ""),
-                "input_schema": fn.get("parameters", {}),
-            })
+            claude_tools.append(
+                {
+                    "name": fn.get("name", ""),
+                    "description": fn.get("description", ""),
+                    "input_schema": fn.get("parameters", {}),
+                }
+            )
         return claude_tools
-

@@ -1,10 +1,12 @@
 """Ollama local model client."""
+
 from __future__ import annotations
 
 import json
+
 import httpx
 
-from . import LLMClient, LLMConfig, LLMResult
+from . import LLMClient, LLMResult
 
 
 class OllamaClient(LLMClient):
@@ -49,24 +51,28 @@ class OllamaClient(LLMClient):
         content_buf = ""
 
         timeout = httpx.Timeout(connect=15.0, read=600.0, write=15.0, pool=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST", f"{self.config.base_url}/api/chat", json=body,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    try:
-                        chunk = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if chunk.get("done"):
-                        break
-                    msg = chunk.get("message", {})
-                    content = msg.get("content", "")
-                    if content:
-                        content_buf += content
-                        if on_token:
-                            on_token(content)
+        async with (
+            httpx.AsyncClient(timeout=timeout) as client,
+            client.stream(
+                "POST",
+                f"{self.config.base_url}/api/chat",
+                json=body,
+            ) as resp,
+        ):
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if chunk.get("done"):
+                    break
+                msg = chunk.get("message", {})
+                content = msg.get("content", "")
+                if content:
+                    content_buf += content
+                    if on_token:
+                        on_token(content)
 
         result.content = content_buf
         return result

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from pathlib import Path
 
 from .base import ToolBase, ToolOutput
@@ -21,7 +20,8 @@ async def _run_graphify(*args) -> tuple[str, int]:
     """Run graphify CLI and return (stdout, exit_code)."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "graphify", *args,
+            "graphify",
+            *args,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -99,18 +99,19 @@ class GraphifyTool(ToolBase):
                 node_list = data.get("nodes", [])
                 nodes = len(node_list)
                 edges = len(data.get("links", []))
-                communities = len(set(
-                    n.get("community", -1) for n in node_list
-                    if n.get("community", -1) >= 0
-                ))
+                communities = len(
+                    set(n.get("community", -1) for n in node_list if n.get("community", -1) >= 0)
+                )
                 return ToolOutput(
                     text=f"Graph: {nodes} nodes, {edges} edges, {communities} communities\n"
-                         f"Location: {graph_path}",
+                    f"Location: {graph_path}",
                     title="Graphify Info",
                     metadata={"nodes": nodes, "edges": edges, "communities": communities},
                 )
             except Exception as e:
-                return ToolOutput(text=f"Error reading graph: {e}", title="Graphify Info", error=True)
+                return ToolOutput(
+                    text=f"Error reading graph: {e}", title="Graphify Info", error=True
+                )
 
         if subcommand == "god-nodes":
             top = arg1 if arg1 and arg1.isdigit() else str(top_n)

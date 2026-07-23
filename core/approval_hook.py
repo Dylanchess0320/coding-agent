@@ -7,13 +7,12 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 from core.hooks import AgentPlugin, HookContext
-from core.types import ToolPermissionLevel, ToolApprovalRequest, ToolApprovalResult
-
+from core.types import ToolApprovalRequest, ToolApprovalResult, ToolPermissionLevel
 
 _TOOL_PERMISSIONS: dict[str, ToolPermissionLevel] = {
     # ---- Always allow (read-only / stateless / harmless) ----
@@ -117,6 +116,7 @@ _TOOL_PERMISSIONS: dict[str, ToolPermissionLevel] = {
 
 class ApprovalHook(AgentPlugin):
     """Hook that requests user approval before executing dangerous tools."""
+
     name = "approval"
 
     def __init__(
@@ -141,8 +141,11 @@ class ApprovalHook(AgentPlugin):
     def before_tool(self, tool_name: str, tool_args: dict, ctx: HookContext) -> None | dict:
         level = self.get_permission(tool_name)
         if level == ToolPermissionLevel.BLOCKED:
-            return {"role": "tool", "tool_call_id": tool_args.get("_id", "unknown"),
-                    "content": f"Error: Tool '{tool_name}' is blocked for security reasons."}
+            return {
+                "role": "tool",
+                "tool_call_id": tool_args.get("_id", "unknown"),
+                "content": f"Error: Tool '{tool_name}' is blocked for security reasons.",
+            }
         if level == ToolPermissionLevel.ALWAYS_ALLOW or self.auto_approve_all:
             return None
         if level == ToolPermissionLevel.REQUIRES_APPROVAL:
@@ -154,28 +157,39 @@ class ApprovalHook(AgentPlugin):
             if tp.get("auto_approve", False):
                 return None
             if tp.get("block", False):
-                return {"role": "tool", "tool_call_id": tool_args.get("_id", "unknown"),
-                        "content": f"Error: Tool '{tool_name}' is blocked by policy."}
+                return {
+                    "role": "tool",
+                    "tool_call_id": tool_args.get("_id", "unknown"),
+                    "content": f"Error: Tool '{tool_name}' is blocked by policy.",
+                }
         return self._request_approval(tool_name, tool_args)
 
     def _request_approval(self, tool_name: str, tool_args: dict) -> dict | None:
         clean_args = {k: v for k, v in tool_args.items() if not k.startswith("_")}
         request = ToolApprovalRequest(
-            tool_name=tool_name, tool_args=clean_args,
+            tool_name=tool_name,
+            tool_args=clean_args,
             call_id=tool_args.get("_id", "unknown"),
-            session_id=self.session_id, turn=0,
+            session_id=self.session_id,
+            turn=0,
         )
         if self.approval_callback:
             result = self.approval_callback(request)
             if not result or not result.approved:
                 reason = result.reason if result else "No approval provided"
-                return {"role": "tool", "tool_call_id": request.call_id,
-                        "content": f"Tool execution denied by user: {reason}"}
+                return {
+                    "role": "tool",
+                    "tool_call_id": request.call_id,
+                    "content": f"Tool execution denied by user: {reason}",
+                }
             return None
         if self.approval_dir:
             return self._file_based_approval(request)
-        return {"role": "tool", "tool_call_id": request.call_id,
-                "content": f"Error: Tool '{tool_name}' requires approval but no approval mechanism configured."}
+        return {
+            "role": "tool",
+            "tool_call_id": request.call_id,
+            "content": f"Error: Tool '{tool_name}' requires approval but no approval mechanism configured.",
+        }
 
     def _file_based_approval(self, request: ToolApprovalRequest) -> dict | None:
         """File-based IPC approval (pattern from Cline's tool-approval.ts)."""
@@ -184,12 +198,20 @@ class ApprovalHook(AgentPlugin):
         rid = request.tool_name.replace(" ", "_").lower()
         req_path = approval_dir / f"{self.session_id}.request.{rid}.json"
         dec_path = approval_dir / f"{self.session_id}.decision.{rid}.json"
-        req_path.write_text(json.dumps({
-            "requestId": rid, "sessionId": self.session_id,
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-            "toolCallId": request.call_id, "toolName": request.tool_name,
-            "input": request.tool_args, "risk": "high",
-        }, indent=2))
+        req_path.write_text(
+            json.dumps(
+                {
+                    "requestId": rid,
+                    "sessionId": self.session_id,
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                    "toolCallId": request.call_id,
+                    "toolName": request.tool_name,
+                    "input": request.tool_args,
+                    "risk": "high",
+                },
+                indent=2,
+            )
+        )
         started_at = time.monotonic()
         while (time.monotonic() - started_at) * 1000 < self.timeout_ms:
             if dec_path.exists():
@@ -199,12 +221,17 @@ class ApprovalHook(AgentPlugin):
                     req_path.unlink(missing_ok=True)
                     if data.get("approved", False):
                         return None
-                    return {"role": "tool", "tool_call_id": request.call_id,
-                            "content": f"Tool execution denied: {data.get('reason', 'No reason')}"}
+                    return {
+                        "role": "tool",
+                        "tool_call_id": request.call_id,
+                        "content": f"Tool execution denied: {data.get('reason', 'No reason')}",
+                    }
                 except Exception:
                     pass
             time.sleep(0.2)
         req_path.unlink(missing_ok=True)
-        return {"role": "tool", "tool_call_id": request.call_id,
-                "content": f"Tool approval timed out after {self.timeout_ms/1000}s for '{request.tool_name}'."}
-
+        return {
+            "role": "tool",
+            "tool_call_id": request.call_id,
+            "content": f"Tool approval timed out after {self.timeout_ms/1000}s for '{request.tool_name}'.",
+        }

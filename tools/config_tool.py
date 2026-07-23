@@ -4,9 +4,6 @@ Config tool - read/write LuckyD Code settings mid-session.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
 
@@ -35,8 +32,14 @@ class ConfigTool(ToolBase):
     description = "Read or write LuckyD Code settings mid-session. Omit value to read, provide value to update. Supported: model, max_tokens, temperature, theme, verify_edits, max_turns, effort."
     aliases = ["Settings", "SetConfig"]
     parameters = {
-        "setting": {"type": "string", "description": "The setting key. Supported: model, max_tokens, temperature, theme, verify_edits, max_turns, effort"},
-        "value": {"type": ["string", "boolean", "number", "null"], "description": "New value to set. Omit to read current."},
+        "setting": {
+            "type": "string",
+            "description": "The setting key. Supported: model, max_tokens, temperature, theme, verify_edits, max_turns, effort",
+        },
+        "value": {
+            "type": ["string", "boolean", "number", "null"],
+            "description": "New value to set. Omit to read current.",
+        },
     }
 
     async def execute(self, setting: str, value=None) -> ToolOutput:
@@ -59,7 +62,7 @@ class ConfigTool(ToolBase):
         _overrides[setting] = value
         return ToolOutput(
             text=f"**{setting}** set to `{value!r}`",
-            title=f"Config Updated",
+            title="Config Updated",
             metadata={"setting": setting, "value": value},
         )
 

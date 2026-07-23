@@ -54,7 +54,9 @@ def tmp_project_dir() -> Generator[Path, None, None]:
         # Create a subdirectory
         (project_dir / "src").mkdir(exist_ok=True)
         (project_dir / "src" / "__init__.py").write_text("", encoding="utf-8")
-        (project_dir / "src" / "module.py").write_text("def foo():\n    return 42\n", encoding="utf-8")
+        (project_dir / "src" / "module.py").write_text(
+            "def foo():\n    return 42\n", encoding="utf-8"
+        )
 
         yield project_dir
 
@@ -157,7 +159,9 @@ def temp_config_file(tmp_project_dir: Path) -> Path:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers."""
-    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    )
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "network: marks tests that require network access")
     config.addinivalue_line("markers", "llm: marks tests that call an LLM API")

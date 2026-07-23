@@ -10,13 +10,12 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
-from dataclasses import dataclass, field
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
 
-
 # ── Diff Tool ──
+
 
 class DiffTool(ToolBase):
     name = "Diff"
@@ -29,7 +28,10 @@ class DiffTool(ToolBase):
             "description": "file_vs_proposed, file_vs_file, or string_vs_string",
         },
         "file_path": {"type": "string", "description": "Path to existing file (for file modes)"},
-        "proposed_content": {"type": "string", "description": "Proposed new content (for file_vs_proposed)"},
+        "proposed_content": {
+            "type": "string",
+            "description": "Proposed new content (for file_vs_proposed)",
+        },
         "file_path_b": {"type": "string", "description": "Second file path (for file_vs_file)"},
         "string_a": {"type": "string", "description": "First string (for string_vs_string)"},
         "string_b": {"type": "string", "description": "Second string (for string_vs_string)"},
@@ -39,12 +41,19 @@ class DiffTool(ToolBase):
     }
 
     async def execute(
-        self, mode: str, file_path: str = "", proposed_content: str = "",
-        file_path_b: str = "", string_a: str = "", string_b: str = "",
-        context_lines: int = 3, label_a: str = "", label_b: str = "",
+        self,
+        mode: str,
+        file_path: str = "",
+        proposed_content: str = "",
+        file_path_b: str = "",
+        string_a: str = "",
+        string_b: str = "",
+        context_lines: int = 3,
+        label_a: str = "",
+        label_b: str = "",
     ) -> ToolOutput:
         import difflib
-        
+
         try:
             if mode == "file_vs_proposed":
                 path = Path(file_path).expanduser().resolve()
@@ -73,7 +82,7 @@ class DiffTool(ToolBase):
             result = "".join(diff)
             if not result:
                 result = "(no differences)"
-            
+
             return ToolOutput(
                 text=result[:8000],
                 title=f"Diff: {label_a} → {label_b}",
@@ -102,19 +111,28 @@ class ProcessTool(ToolBase):
         "command": {"type": "string", "description": "Shell command to run (required for start)"},
         "process_id": {"type": "string", "description": "Process ID returned by start"},
         "cwd": {"type": "string", "description": "Working directory for the process"},
-        "clear": {"type": "boolean", "description": "Clear output buffer after reading (default: True)"},
+        "clear": {
+            "type": "boolean",
+            "description": "Clear output buffer after reading (default: True)",
+        },
     }
 
     async def execute(
-        self, op: str, command: str = "", process_id: str = "",
-        cwd: str = "", clear: bool = True,
+        self,
+        op: str,
+        command: str = "",
+        process_id: str = "",
+        cwd: str = "",
+        clear: bool = True,
     ) -> ToolOutput:
         try:
             if op == "list":
                 lines = []
                 for pid, proc in _processes.items():
                     running = proc.poll() is None
-                    lines.append(f"  {pid}: {'🟢 running' if running else '🔴 exited'} | {proc.args}")
+                    lines.append(
+                        f"  {pid}: {'🟢 running' if running else '🔴 exited'} | {proc.args}"
+                    )
                 return ToolOutput(
                     text="\n".join(lines) if lines else "No processes.",
                     title=f"Processes ({len(_processes)})",
@@ -124,8 +142,11 @@ class ProcessTool(ToolBase):
                 pid = str(uuid.uuid4())[:8]
                 work_dir = cwd or os.getcwd()
                 proc = subprocess.Popen(
-                    command, shell=True, cwd=work_dir,
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    command,
+                    shell=True,
+                    cwd=work_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
                     text=True,
                 )
                 _processes[pid] = proc
@@ -142,6 +163,7 @@ class ProcessTool(ToolBase):
                 proc = _processes[process_id]
                 # Non-blocking read
                 import select
+
                 if proc.stdout:
                     while True:
                         ready, _, _ = select.select([proc.stdout], [], [], 0.1)
@@ -152,11 +174,11 @@ class ProcessTool(ToolBase):
                             break
                         if process_id in _process_outputs:
                             _process_outputs[process_id].append(line)
-                
+
                 output = "".join(_process_outputs.get(process_id, [])[-50:]) or "(no output)"
                 if clear and process_id in _process_outputs:
                     _process_outputs[process_id] = []
-                
+
                 return ToolOutput(
                     text=output[:4000],
                     title=f"📄 Output [{process_id}]",
@@ -192,6 +214,7 @@ class ProcessTool(ToolBase):
 
 # ── Notification Tool ──
 
+
 class NotifyTool(ToolBase):
     name = "Notify"
     description = "Send a desktop notification to alert the user that something finished."
@@ -204,22 +227,29 @@ class NotifyTool(ToolBase):
     }
 
     async def execute(
-        self, message: str, title: str = "LuckyD Code",
-        duration: int = 5, level: str = "info",
+        self,
+        message: str,
+        title: str = "LuckyD Code",
+        duration: int = 5,
+        level: str = "info",
     ) -> ToolOutput:
-        emoji = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "❌"}.get(level, "")
-        
+        emoji = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "❌"}.get(  # noqa: RUF001
+            level, ""
+        )
+
         # Try Windows toast
         try:
             import platform
+
             if platform.system() == "Windows":
                 from win10toast import ToastNotifier
+
                 toaster = ToastNotifier()
                 toaster.show_toast(title, f"{emoji} {message}", duration=duration, threaded=True)
                 return ToolOutput(text=f"Notification sent: {emoji} {message}", title="🔔 Notified")
         except ImportError:
             pass
-        
+
         # Fallback: print
         print(f"\n  {emoji} {title}: {message}")
         return ToolOutput(text=f"{emoji} {message}", title="🔔 Notified")
@@ -246,14 +276,25 @@ class WatchTool(ToolBase):
             "enum": ["exists", "changed", "contains", "deleted"],
             "description": "Trigger condition (default: changed)",
         },
-        "contains_text": {"type": "string", "description": "Text to look for (required for contains condition)"},
+        "contains_text": {
+            "type": "string",
+            "description": "Text to look for (required for contains condition)",
+        },
         "watch_id": {"type": "string", "description": "Watch ID returned by arm"},
-        "timeout_sec": {"type": "integer", "description": "How long to block waiting (default: 30)"},
+        "timeout_sec": {
+            "type": "integer",
+            "description": "How long to block waiting (default: 30)",
+        },
     }
 
     async def execute(
-        self, op: str, path: str = "", condition: str = "changed",
-        contains_text: str = "", watch_id: str = "", timeout_sec: int = 30,
+        self,
+        op: str,
+        path: str = "",
+        condition: str = "changed",
+        contains_text: str = "",
+        watch_id: str = "",
+        timeout_sec: int = 30,
     ) -> ToolOutput:
         try:
             if op == "list":
@@ -272,7 +313,7 @@ class WatchTool(ToolBase):
                 if file_path.exists():
                     snapshot["mtime"] = file_path.stat().st_mtime
                     snapshot["size"] = file_path.stat().st_size
-                
+
                 _watches[wid] = {
                     "path": str(file_path),
                     "condition": condition,
@@ -293,7 +334,7 @@ class WatchTool(ToolBase):
                 w = _watches[watch_id]
                 file_path = Path(w["path"])
                 fired = False
-                
+
                 if w["condition"] == "exists":
                     fired = file_path.exists()
                 elif w["condition"] == "deleted":
@@ -302,11 +343,12 @@ class WatchTool(ToolBase):
                     if file_path.exists():
                         mtime = file_path.stat().st_mtime
                         size = file_path.stat().st_size
-                        fired = (mtime != w["snapshot"].get("mtime") or size != w["snapshot"].get("size"))
-                elif w["condition"] == "contains":
-                    if file_path.exists():
-                        content = file_path.read_text(errors="replace")
-                        fired = w.get("contains_text", "") in content
+                        fired = mtime != w["snapshot"].get("mtime") or size != w["snapshot"].get(
+                            "size"
+                        )
+                elif w["condition"] == "contains" and file_path.exists():
+                    content = file_path.read_text(errors="replace")
+                    fired = w.get("contains_text", "") in content
 
                 w["fired"] = fired
                 return ToolOutput(
@@ -331,12 +373,13 @@ class WatchTool(ToolBase):
                         if file_path.exists():
                             mtime = file_path.stat().st_mtime
                             size = file_path.stat().st_size
-                            fired = (mtime != w["snapshot"].get("mtime") or size != w["snapshot"].get("size"))
-                    elif w["condition"] == "contains":
-                        if file_path.exists():
-                            content = file_path.read_text(errors="replace")
-                            fired = w.get("contains_text", "") in content
-                    
+                            fired = mtime != w["snapshot"].get("mtime") or size != w[
+                                "snapshot"
+                            ].get("size")
+                    elif w["condition"] == "contains" and file_path.exists():
+                        content = file_path.read_text(errors="replace")
+                        fired = w.get("contains_text", "") in content
+
                     if fired:
                         w["fired"] = True
                         return ToolOutput(
@@ -345,7 +388,7 @@ class WatchTool(ToolBase):
                             metadata={"watch_id": watch_id},
                         )
                     await asyncio.sleep(1.0)
-                
+
                 return ToolOutput(
                     text=f"Watch [{watch_id}] timed out after {timeout_sec}s",
                     title=f"⏰ Watch {watch_id} Timeout",
@@ -356,7 +399,9 @@ class WatchTool(ToolBase):
                 if watch_id not in _watches:
                     return ToolOutput(text=f"Watch not found: {watch_id}", error=True)
                 _watches.pop(watch_id, None)
-                return ToolOutput(text=f"Cancelled watch: {watch_id}", title=f"✗ Cancelled {watch_id}")
+                return ToolOutput(
+                    text=f"Cancelled watch: {watch_id}", title=f"✗ Cancelled {watch_id}"
+                )
 
             return ToolOutput(text=f"Unknown op: {op}", error=True)
         except Exception as e:

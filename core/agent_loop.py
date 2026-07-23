@@ -58,6 +58,7 @@ RULES:
 - Return ONLY a JSON object like {"memories": [...]}, nothing else.
 """
 
+
 class CodingAgent:
     """Production-hardened agent with streaming, hooks, checkpointing, and approval support."""
 
@@ -101,9 +102,12 @@ class CodingAgent:
 
         # Provider routing
         from llm import LLMConfig, ProviderRouter
+
         self._provider_config = LLMConfig(
-            api_key=self.api_key, base_url=self.base_url,
-            model=self.model, temperature=self.temperature,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            model=self.model,
+            temperature=self.temperature,
             max_tokens=self.max_tokens,
             provider=cfg.get("provider", "deepseek"),
             thinking=cfg.get("thinking", False),
@@ -112,10 +116,14 @@ class CodingAgent:
 
         # New modular components
         self.llm_client = LLMClient(
-            api_key=self.api_key, base_url=self.base_url,
-            model=self.model, temperature=self.temperature,
-            max_tokens=self.max_tokens, timeout_sec=self.timeout_sec,
-            max_retries=self.max_retries, base_delay=self.base_delay,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            model=self.model,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            timeout_sec=self.timeout_sec,
+            max_retries=self.max_retries,
+            base_delay=self.base_delay,
         )
         self.message_builder = MessageBuilder()
         self.hooks = get_hooks()
@@ -123,6 +131,7 @@ class CodingAgent:
         # Project intelligence
         try:
             from project import ProjectDetector
+
             self._project_info = ProjectDetector().detect(PROJECT_DIR)
         except Exception:
             self._project_info = None
@@ -149,8 +158,13 @@ class CodingAgent:
 
     @property
     def provider_name(self) -> str:
-        names = {"deepseek": "DeepSeek", "openai": "OpenAI", "anthropic": "Anthropic",
-                 "google": "Google", "ollama": "Ollama"}
+        names = {
+            "deepseek": "DeepSeek",
+            "openai": "OpenAI",
+            "anthropic": "Anthropic",
+            "google": "Google",
+            "ollama": "Ollama",
+        }
         return names.get(self._provider_config.provider, self._provider_config.provider)
 
     def switch_provider(self, config: LLMConfig) -> None:
@@ -191,8 +205,11 @@ class CodingAgent:
 
         if not tool:
             known = ", ".join(registry.list_tools())
-            return {"role": "tool", "tool_call_id": call_id,
-                    "content": f"Error: Unknown tool '{tool_name}'. Available: {known}"}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": f"Error: Unknown tool '{tool_name}'. Available: {known}",
+            }
 
         # Run before_tool hooks (approval, checkpoint, etc.)
         ctx = HookContext(turn=self.turn_count, messages=self.messages)
@@ -212,14 +229,22 @@ class CodingAgent:
             result_text = f"Tool argument error: {e}\nExpected: {json.dumps(tool.parameters)}"
             return {"role": "tool", "tool_call_id": call_id, "content": result_text}
         except asyncio.TimeoutError:
-            return {"role": "tool", "tool_call_id": call_id, "content": "Tool execution timed out after 60s."}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": "Tool execution timed out after 60s.",
+            }
         except Exception as e:
             traceback.print_exc()
-            return {"role": "tool", "tool_call_id": call_id, "content": f"Tool execution error: {e}"}
+            return {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": f"Tool execution error: {e}",
+            }
 
         content = result.text
         if len(content) > self.max_output_chars:
-            content = content[:self.max_output_chars] + "\n... [output truncated]"
+            content = content[: self.max_output_chars] + "\n... [output truncated]"
         if result.error and not content.startswith("Error"):
             content = f"Error: {content}"
 
@@ -262,7 +287,10 @@ class CodingAgent:
         transcript = "\n".join(transcript_lines[-40:])
         extraction_messages = [
             {"role": "system", "content": MEMORY_EXTRACTION_PROMPT},
-            {"role": "user", "content": f"Conversation transcript:\n\n{transcript}\n\nExtract memories (JSON object only):"},
+            {
+                "role": "user",
+                "content": f"Conversation transcript:\n\n{transcript}\n\nExtract memories (JSON object only):",
+            },
         ]
 
         try:
@@ -290,7 +318,8 @@ class CodingAgent:
                     continue
                 category = mem.get("category", "general")
                 tags = mem.get("tags", [])
-                await asyncio.to_thread(memory.add,
+                await asyncio.to_thread(
+                    memory.add,
                     content=f"[{category}] {mcontent}",
                     tags=[*tags, "extracted", category],
                     source=f"auto-extract-{self.conversation_id}",
@@ -306,12 +335,15 @@ class CodingAgent:
         url = f"{self.base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
-            "model": self.model, "messages": messages,
-            "temperature": 0.3, "max_tokens": 1024,
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 1024,
             "response_format": {"type": "json_object"},
         }
         try:
             from core.llm_client import LLMClient
+
             tmp_client = LLMClient(self.api_key, self.base_url, self.model, timeout_sec=30)
             resp = await tmp_client._http_post(url, headers, payload)
             data = resp.json()
@@ -339,10 +371,12 @@ class CodingAgent:
                 memories = await asyncio.to_thread(memory.get_context, user_message, limit=3)
                 if memories and "(no relevant memories)" not in memories:
                     self._memory_context = memories
-                    self.messages.append({
-                        "role": "system",
-                        "content": f"Relevant memories from past sessions:\n{memories}",
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": f"Relevant memories from past sessions:\n{memories}",
+                        }
+                    )
             except Exception:
                 pass
 
@@ -359,24 +393,30 @@ class CodingAgent:
             # Safety: cap messages to prevent context overflow
             if len(self.messages) > 40:
                 from .context_manager import truncate_messages
+
                 self.messages = truncate_messages(self.messages, max_messages=40, keep_recent=20)
-                self._emit_event(AgentEventType.CONTEXT_TRUNCATED, {"message_count": len(self.messages)})
+                self._emit_event(
+                    AgentEventType.CONTEXT_TRUNCATED, {"message_count": len(self.messages)}
+                )
 
             # Per-turn memory refresh
             if (turn + 1) - self._last_memory_refresh_turn >= self._memory_refresh_interval:
                 self._last_memory_refresh_turn = turn + 1
                 try:
                     recent = " ".join(
-                        m.get("content", "")[:200] for m in self.messages[-6:]
+                        m.get("content", "")[:200]
+                        for m in self.messages[-6:]
                         if m.get("role") in ("user", "tool")
                     )
                     if recent:
                         refreshed = await self._refresh_memory_context(recent)
                         if refreshed:
-                            self.messages.append({
-                                "role": "system",
-                                "content": f"[Updated relevant memories]\n{self._memory_context}",
-                            })
+                            self.messages.append(
+                                {
+                                    "role": "system",
+                                    "content": f"[Updated relevant memories]\n{self._memory_context}",
+                                }
+                            )
                             self._emit_event(AgentEventType.MEMORY_REFRESH, {})
                 except Exception:
                     pass
@@ -393,11 +433,14 @@ class CodingAgent:
                     print(f"\n  [HOOK ERR] before_model hook failed: {e}")
 
             # Call LLM
-            self._emit_event(AgentEventType.MODEL_REQUEST, {"message_count": len(modified_messages)})
+            self._emit_event(
+                AgentEventType.MODEL_REQUEST, {"message_count": len(modified_messages)}
+            )
             tools = registry.openai_tools()
             try:
                 assistant_msg = await self.llm_client.chat_stream(
-                    messages=modified_messages, tools=tools,
+                    messages=modified_messages,
+                    tools=tools,
                     stream_callback=self.callbacks.stream_token,
                     think_callback=self.callbacks.stream_think_token,
                 )
@@ -428,13 +471,18 @@ class CodingAgent:
             usage = assistant_msg.get("_usage", {}) if isinstance(assistant_msg, dict) else {}
             if usage:
                 self._cost_tracker.add_usage(usage, self.model)
-            assistant_msg = assistant_msg.to_dict() if hasattr(assistant_msg, "to_dict") else assistant_msg
+            assistant_msg = (
+                assistant_msg.to_dict() if hasattr(assistant_msg, "to_dict") else assistant_msg
+            )
 
             self.messages.append(assistant_msg)
-            self._emit_event(AgentEventType.MODEL_RESPONSE, {
-                "has_content": bool(assistant_msg.get("content")),
-                "has_tool_calls": bool(assistant_msg.get("tool_calls")),
-            })
+            self._emit_event(
+                AgentEventType.MODEL_RESPONSE,
+                {
+                    "has_content": bool(assistant_msg.get("content")),
+                    "has_tool_calls": bool(assistant_msg.get("tool_calls")),
+                },
+            )
 
             content = assistant_msg.get("content", "")
             tool_calls = assistant_msg.get("tool_calls", [])
@@ -462,14 +510,20 @@ class CodingAgent:
                 is_err = result_msg["content"].startswith("Error")
                 status = "[ERR]" if is_err else "[OK]"
                 print(f"  {status} [{tool_name}] {elapsed:.1f}s — {content_preview}")
-                self._emit_event(AgentEventType.TOOL_END if not is_err else AgentEventType.TOOL_ERROR,
-                                  {"tool": tool_name, "elapsed": elapsed, "error": is_err})
+                self._emit_event(
+                    AgentEventType.TOOL_END if not is_err else AgentEventType.TOOL_ERROR,
+                    {"tool": tool_name, "elapsed": elapsed, "error": is_err},
+                )
                 tool_results.append(result_msg)
                 if is_err and turn >= 1:
                     for m in self.messages[-3:]:
                         if m.get("role") == "tool" and m.get("content", "").startswith("Error"):
-                            hint_messages.append({"role": "system",
-                                "content": "HINT: The previous call to this tool failed. Try a different approach."})
+                            hint_messages.append(
+                                {
+                                    "role": "system",
+                                    "content": "HINT: The previous call to this tool failed. Try a different approach.",
+                                }
+                            )
                             break
 
             self.messages.extend(tool_results)
@@ -480,10 +534,12 @@ class CodingAgent:
         else:
             # Max turns reached
             if not final_text:
-                self.messages.append({
-                    "role": "user",
-                    "content": "You've reached the maximum number of turns. Summarize what you've done and what remains.",
-                })
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": "You've reached the maximum number of turns. Summarize what you've done and what remains.",
+                    }
+                )
                 summary = await self.llm_client.chat_stream(self.messages)
                 if summary:
                     final_text = summary.get("content", "(timeout)")
@@ -504,12 +560,17 @@ class CodingAgent:
         try:
             memory = await asyncio.to_thread(get_memory)
             recent_text = " ".join(
-                m.get("content", "")[:200] for m in self.messages[-4:]
+                m.get("content", "")[:200]
+                for m in self.messages[-4:]
                 if m.get("role") in ("user", "tool")
             )
             query = f"{current_query} {recent_text}"[:500]
             new_context = await asyncio.to_thread(memory.get_context, query, 3)
-            if new_context and new_context != self._memory_context and "(no relevant memories)" not in new_context:
+            if (
+                new_context
+                and new_context != self._memory_context
+                and "(no relevant memories)" not in new_context
+            ):
                 self._memory_context = new_context
                 return True
         except Exception:
@@ -523,13 +584,15 @@ class CodingAgent:
             return None
         try:
             store = get_session_store()
-            return str(store.save(
-                conversation_id=self.conversation_id,
-                messages=self.messages,
-                model=self.model,
-                provider=self.provider_name,
-                meta={"turn_count": self.turn_count},
-            ))
+            return str(
+                store.save(
+                    conversation_id=self.conversation_id,
+                    messages=self.messages,
+                    model=self.model,
+                    provider=self.provider_name,
+                    meta={"turn_count": self.turn_count},
+                )
+            )
         except Exception:
             return None
 
@@ -552,7 +615,5 @@ class CodingAgent:
         self._memory_context = ""
         self.conversation_id = datetime.now(timezone.utc).strftime("conv_%Y%m%d_%H%M%S")
         from core.hooks import reset_hooks
+
         reset_hooks()
-
-
-

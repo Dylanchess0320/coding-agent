@@ -114,13 +114,15 @@ class SessionStore:
         for f in files[:limit]:
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
-                out.append({
-                    "conversation_id": data.get("conversation_id", f.stem),
-                    "preview": data.get("preview", ""),
-                    "updated_at": data.get("updated_at", ""),
-                    "model": data.get("model", ""),
-                    "message_count": data.get("message_count", 0),
-                })
+                out.append(
+                    {
+                        "conversation_id": data.get("conversation_id", f.stem),
+                        "preview": data.get("preview", ""),
+                        "updated_at": data.get("updated_at", ""),
+                        "model": data.get("model", ""),
+                        "message_count": data.get("message_count", 0),
+                    }
+                )
             except Exception:
                 continue
         return out

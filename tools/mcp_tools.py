@@ -85,6 +85,7 @@ class MCPToolAdapter(ToolBase):
 
 class MCPListTool(ToolBase):
     """List all connected MCP servers and their tools."""
+
     name = "MCPList"
     description = "List all MCP servers, their status, and available remote tools."
     permission_level = "ALWAYS_ALLOW"

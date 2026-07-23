@@ -5,10 +5,6 @@ The sub-agent inherits the same model, tools, and memory but runs independently.
 
 from __future__ import annotations
 
-import asyncio
-import json
-from datetime import datetime, timezone
-
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
 
@@ -40,7 +36,7 @@ class SubAgentTool(ToolBase):
             result = await agent.run(task, max_turns=min(max_turns, 10))
             return ToolOutput(
                 text=result,
-                title=f"SubAgent Result",
+                title="SubAgent Result",
                 metadata={"task": task[:100], "turns_used": agent.turn_count},
             )
         except Exception as e:

@@ -1,10 +1,10 @@
 """Project Intelligence Engine — auto-detect project type, framework, conventions."""
+
 from __future__ import annotations
 
-import os
 import json
+import os
 import re
-import glob
 from pathlib import Path
 
 from .types import ProjectInfo
@@ -15,44 +15,77 @@ class ProjectDetector:
 
     FRAMEWORK_SIGS = {
         "Python": [
-            ("django", "Django"), ("flask", "Flask"), ("fastapi", "FastAPI"),
-            ("tornado", "Tornado"), ("starlette", "Starlette"), ("aiohttp", "aiohttp"),
-            ("pytest", "pytest"), ("sqlalchemy", "SQLAlchemy"), ("numpy", "NumPy"),
-            ("pandas", "Pandas"), ("torch", "PyTorch"), ("tensorflow", "TensorFlow"),
+            ("django", "Django"),
+            ("flask", "Flask"),
+            ("fastapi", "FastAPI"),
+            ("tornado", "Tornado"),
+            ("starlette", "Starlette"),
+            ("aiohttp", "aiohttp"),
+            ("pytest", "pytest"),
+            ("sqlalchemy", "SQLAlchemy"),
+            ("numpy", "NumPy"),
+            ("pandas", "Pandas"),
+            ("torch", "PyTorch"),
+            ("tensorflow", "TensorFlow"),
         ],
         "JavaScript": [
-            ("react", "React"), ("vue", "Vue.js"), ("angular", "Angular"),
-            ("svelte", "Svelte"), ("next", "Next.js"), ("nuxt", "Nuxt.js"),
-            ("express", "Express.js"), ("nestjs", "NestJS"), ("jest", "Jest"),
+            ("react", "React"),
+            ("vue", "Vue.js"),
+            ("angular", "Angular"),
+            ("svelte", "Svelte"),
+            ("next", "Next.js"),
+            ("nuxt", "Nuxt.js"),
+            ("express", "Express.js"),
+            ("nestjs", "NestJS"),
+            ("jest", "Jest"),
         ],
         "TypeScript": [
-            ("react", "React"), ("vue", "Vue.js"), ("angular", "Angular"),
-            ("next", "Next.js"), ("nuxt", "Nuxt.js"), ("express", "Express.js"),
-            ("nestjs", "NestJS"), ("typeorm", "TypeORM"), ("prisma", "Prisma"),
+            ("react", "React"),
+            ("vue", "Vue.js"),
+            ("angular", "Angular"),
+            ("next", "Next.js"),
+            ("nuxt", "Nuxt.js"),
+            ("express", "Express.js"),
+            ("nestjs", "NestJS"),
+            ("typeorm", "TypeORM"),
+            ("prisma", "Prisma"),
         ],
         "Rust": [
-            ("axum", "Axum"), ("actix", "Actix-web"), ("rocket", "Rocket"),
-            ("tokio", "Tokio"), ("serde", "Serde"),
+            ("axum", "Axum"),
+            ("actix", "Actix-web"),
+            ("rocket", "Rocket"),
+            ("tokio", "Tokio"),
+            ("serde", "Serde"),
         ],
         "Go": [
-            ("gin", "Gin"), ("echo", "Echo"), ("fiber", "Fiber"),
-            ("cobra", "Cobra"), ("gorm", "GORM"),
+            ("gin", "Gin"),
+            ("echo", "Echo"),
+            ("fiber", "Fiber"),
+            ("cobra", "Cobra"),
+            ("gorm", "GORM"),
         ],
     }
 
-        
     BUILD_SYSTEMS = {
-        "pyproject.toml": "poetry/pdm", "setup.py": "setuptools",
-        "setup.cfg": "setuptools", "requirements.txt": "pip",
-        "Pipfile": "pipenv", "Cargo.toml": "cargo",
-        "go.mod": "go mod", "package.json": "npm",
-        "yarn.lock": "yarn", "pnpm-lock.yaml": "pnpm",
-        "Gemfile": "bundler", "composer.json": "composer",
-        "build.gradle": "gradle", "build.gradle.kts": "gradle",
-        "pom.xml": "maven", "Makefile": "make",
-        "CMakeLists.txt": "cmake", "mix.exs": "mix",
+        "pyproject.toml": "poetry/pdm",
+        "setup.py": "setuptools",
+        "setup.cfg": "setuptools",
+        "requirements.txt": "pip",
+        "Pipfile": "pipenv",
+        "Cargo.toml": "cargo",
+        "go.mod": "go mod",
+        "package.json": "npm",
+        "yarn.lock": "yarn",
+        "pnpm-lock.yaml": "pnpm",
+        "Gemfile": "bundler",
+        "composer.json": "composer",
+        "build.gradle": "gradle",
+        "build.gradle.kts": "gradle",
+        "pom.xml": "maven",
+        "Makefile": "make",
+        "CMakeLists.txt": "cmake",
+        "mix.exs": "mix",
     }
-
 
     def detect(self, path: str | Path) -> ProjectInfo:
         """Detect project information from a directory."""
@@ -69,9 +102,26 @@ class ProjectDetector:
         all_files = []
 
         for dirpath, dirnames, filenames in os.walk(str(root), topdown=True):
-            dirnames[:] = [d for d in dirnames if not d.startswith(
-                (".", "__", "node_modules", "venv", ".venv", ".git", "target",
-                 "build", "dist", ".next", ".nuxt", "__pycache__"))]
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if not d.startswith(
+                    (
+                        ".",
+                        "__",
+                        "node_modules",
+                        "venv",
+                        ".venv",
+                        ".git",
+                        "target",
+                        "build",
+                        "dist",
+                        ".next",
+                        ".nuxt",
+                        "__pycache__",
+                    )
+                )
+            ]
             dirs_walked += 1
             for f in filenames:
                 files_walked += 1
@@ -95,14 +145,15 @@ class ProjectDetector:
         info.key_files = self._find_key_files(root, info.language)
         info.entry_point = self._find_entry_point(root, info.language)
         info.has_tests = any("test" in f.lower() for f in all_files[:100])
-        info.has_docs = (any(f.startswith("docs/") for f in all_files[:100])
-                         or (root / "docs").is_dir())
-        info.has_docker = ((root / "Dockerfile").exists()
-                           or (root / "docker-compose.yml").exists())
-        info.has_ci = (any(f.startswith(".github/") for f in all_files[:50])
-                       or (root / ".gitlab-ci.yml").exists())
-        info.has_readme = any(f.lower().startswith("readme")
-                             for f in os.listdir(root))
+        info.has_docs = (
+            any(f.startswith("docs/") for f in all_files[:100]) or (root / "docs").is_dir()
+        )
+        info.has_docker = (root / "Dockerfile").exists() or (root / "docker-compose.yml").exists()
+        info.has_ci = (
+            any(f.startswith(".github/") for f in all_files[:50])
+            or (root / ".gitlab-ci.yml").exists()
+        )
+        info.has_readme = any(f.lower().startswith("readme") for f in os.listdir(root))
 
     def _detect_language(self, root: Path, files: list[str]) -> str:
         """Detect primary language from file extensions and manifest files."""
@@ -112,11 +163,26 @@ class ProjectDetector:
             if ext:
                 ext_counts[ext] = ext_counts.get(ext, 0) + 1
 
-        ext_map = {".py": "Python", ".js": "JavaScript", ".jsx": "JavaScript",
-                   ".ts": "TypeScript", ".tsx": "TypeScript", ".go": "Go",
-                   ".rs": "Rust", ".java": "Java", ".rb": "Ruby", ".php": "PHP",
-                   ".c": "C", ".h": "C", ".cpp": "C++", ".hpp": "C++",
-                   ".cs": "C#", ".swift": "Swift", ".kt": "Kotlin", ".kts": "Kotlin"}
+        ext_map = {
+            ".py": "Python",
+            ".js": "JavaScript",
+            ".jsx": "JavaScript",
+            ".ts": "TypeScript",
+            ".tsx": "TypeScript",
+            ".go": "Go",
+            ".rs": "Rust",
+            ".java": "Java",
+            ".rb": "Ruby",
+            ".php": "PHP",
+            ".c": "C",
+            ".h": "C",
+            ".cpp": "C++",
+            ".hpp": "C++",
+            ".cs": "C#",
+            ".swift": "Swift",
+            ".kt": "Kotlin",
+            ".kts": "Kotlin",
+        }
 
         lang_scores: dict[str, int] = {}
         for ext, count in ext_counts.items():

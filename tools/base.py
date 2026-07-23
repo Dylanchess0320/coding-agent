@@ -5,9 +5,6 @@ auto-registration, alias resolution, and rich output.
 
 from __future__ import annotations
 
-import json
-import asyncio
-import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -16,6 +13,7 @@ from typing import Any
 @dataclass
 class ToolOutput:
     """Rich structured output from a tool."""
+
     text: str = ""
     title: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -39,12 +37,11 @@ class ToolBase(ABC):
     description: str = ""
     parameters: dict[str, Any] = {}  # JSON Schema for params
     aliases: list[str] = []  # Alternative names
-    permission_level = 'NORMAL'  # ALWAYS_ALLOW, NORMAL, REQUIRES_APPROVAL, BLOCKED
+    permission_level = "NORMAL"  # ALWAYS_ALLOW, NORMAL, REQUIRES_APPROVAL, BLOCKED
     tracks_files: bool = False  # If True, checkpoint snapshots are taken
 
     @abstractmethod
-    async def execute(self, **kwargs) -> ToolOutput:
-        ...
+    async def execute(self, **kwargs) -> ToolOutput: ...
 
     def to_openai_schema(self) -> dict:
         return {
@@ -55,8 +52,7 @@ class ToolBase(ABC):
                 "parameters": {
                     "type": "object",
                     "properties": self.parameters,
-                    "required": [k for k, v in self.parameters.items()
-                                 if v.get("required", False)],
+                    "required": [k for k, v in self.parameters.items() if v.get("required", False)],
                 },
             },
         }

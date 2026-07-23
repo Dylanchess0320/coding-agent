@@ -21,7 +21,9 @@ class BriefTool(ToolBase):
         "focus": {"type": "string", "description": "Optional focus area for the summary."},
     }
 
-    async def execute(self, file_path: str = "", dir_path: str = "", text: str = "", focus: str = "") -> ToolOutput:
+    async def execute(
+        self, file_path: str = "", dir_path: str = "", text: str = "", focus: str = ""
+    ) -> ToolOutput:
         focus_text = f" (focusing on {focus})" if focus else ""
 
         if text:
@@ -35,8 +37,11 @@ class BriefTool(ToolBase):
                 f"  Characters: {total_chars}\n\n"
                 f"--- Preview (first 500 chars) ---\n{preview}"
             )
-            return ToolOutput(text=summary, title="Text Brief",
-                            metadata={"lines": total_lines, "chars": total_chars})
+            return ToolOutput(
+                text=summary,
+                title="Text Brief",
+                metadata={"lines": total_lines, "chars": total_chars},
+            )
 
         if dir_path:
             p = Path(dir_path)
@@ -65,8 +70,11 @@ class BriefTool(ToolBase):
             )
             if len(files) > 30:
                 summary += f"\n  ... and {len(files)-30} more files"
-            return ToolOutput(text=summary, title=f"Brief: {p.name}",
-                            metadata={"files": len(files), "dirs": len(dirs)})
+            return ToolOutput(
+                text=summary,
+                title=f"Brief: {p.name}",
+                metadata={"files": len(files), "dirs": len(dirs)},
+            )
 
         if file_path:
             p = Path(file_path)
@@ -77,9 +85,19 @@ class BriefTool(ToolBase):
             lines = content.splitlines()
             total_lines = len(lines)
 
-            imports = [l for l in lines[:50] if l.strip().startswith(("import ", "from ", "#include"))]
-            classes = [l for l in lines if l.strip().startswith(("class ", "struct ", "interface "))]
-            functions = [l for l in lines if "def " in l or "function " in l or "func " in l]
+            imports = [
+                line
+                for line in lines[:50]
+                if line.strip().startswith(("import ", "from ", "#include"))
+            ]
+            classes = [
+                line
+                for line in lines
+                if line.strip().startswith(("class ", "struct ", "interface "))
+            ]
+            functions = [
+                line for line in lines if "def " in line or "function " in line or "func " in line
+            ]
 
             summary = (
                 f"File: {p}{focus_text}\n"
@@ -89,10 +107,13 @@ class BriefTool(ToolBase):
                 f"  Classes: {len(classes)}\n"
                 f"  Functions: {len(functions)}\n\n"
                 f"--- Preview (first 10 lines) ---\n"
-                + "\n".join(f"  {i+1}: {l[:100]}" for i, l in enumerate(lines[:10]))
+                + "\n".join(f"  {i+1}: {line[:100]}" for i, line in enumerate(lines[:10]))
             )
-            return ToolOutput(text=summary, title=f"Brief: {p.name}",
-                            metadata={"lines": total_lines, "size": p.stat().st_size})
+            return ToolOutput(
+                text=summary,
+                title=f"Brief: {p.name}",
+                metadata={"lines": total_lines, "size": p.stat().st_size},
+            )
 
         return ToolOutput(text="Provide file_path, dir_path, or text to summarise.", error=True)
 

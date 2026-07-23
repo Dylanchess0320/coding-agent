@@ -8,16 +8,22 @@ import json
 class TestMCPConfig:
     def test_load_config(self, tmp_path):
         from core.mcp_client import load_mcp_config
+
         config_file = tmp_path / "mcp_config.json"
-        config_file.write_text(json.dumps({
-            "mcpServers": {
-                "test-server": {
-                    "command": "echo",
-                    "args": ["hello"],
-                    "env": {"FOO": "bar"},
+        config_file.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "test-server": {
+                            "command": "echo",
+                            "args": ["hello"],
+                            "env": {"FOO": "bar"},
+                        }
+                    }
                 }
-            }
-        }), encoding="utf-8")
+            ),
+            encoding="utf-8",
+        )
         servers = load_mcp_config(str(config_file))
         assert "test-server" in servers
         assert servers["test-server"].command == "echo"
@@ -26,11 +32,13 @@ class TestMCPConfig:
 
     def test_load_config_empty(self, tmp_path):
         from core.mcp_client import load_mcp_config
+
         servers = load_mcp_config(str(tmp_path / "nonexistent.json"))
         assert servers == {}
 
     def test_load_config_invalid_json(self, tmp_path):
         from core.mcp_client import load_mcp_config
+
         config_file = tmp_path / "mcp_config.json"
         config_file.write_text("{invalid json", encoding="utf-8")
         servers = load_mcp_config(str(config_file))
@@ -39,6 +47,7 @@ class TestMCPConfig:
     def test_tool_adapter_naming(self):
         from core.mcp_client import MCPManager, MCPToolSchema
         from tools.mcp_tools import MCPToolAdapter
+
         schema = MCPToolSchema(name="read_file", description="Read a file")
         manager = MCPManager()
         adapter = MCPToolAdapter("filesystem", schema, manager)
@@ -48,6 +57,7 @@ class TestMCPConfig:
     def test_tool_adapter_parameters(self):
         from core.mcp_client import MCPManager, MCPToolSchema
         from tools.mcp_tools import MCPToolAdapter
+
         schema = MCPToolSchema(
             name="search",
             description="Search files",
@@ -70,6 +80,7 @@ class TestMCPConfig:
 class TestCostTracking:
     def test_cost_tracker_summary(self):
         from llm import CostTracker
+
         tracker = CostTracker()
         tracker.add_usage({"prompt_tokens": 1000, "completion_tokens": 500}, "glm-4.5")
         summary = tracker.summary()
@@ -79,6 +90,7 @@ class TestCostTracking:
 
     def test_cost_tracker_to_dict(self):
         from llm import CostTracker
+
         tracker = CostTracker()
         tracker.add_usage({"input_tokens": 100, "output_tokens": 50}, "gpt-4o")
         d = tracker.to_dict()
@@ -88,6 +100,7 @@ class TestCostTracking:
 
     def test_cost_tracker_reset(self):
         from llm import CostTracker
+
         tracker = CostTracker()
         tracker.add_usage({"prompt_tokens": 1000, "completion_tokens": 500}, "glm-4.5")
         tracker.reset()
@@ -97,6 +110,7 @@ class TestCostTracking:
 
     def test_cost_tracker_glm_pricing(self):
         from llm import CostTracker
+
         tracker = CostTracker()
         tracker.add_usage({"prompt_tokens": 1000000, "completion_tokens": 1000000}, "glm-4.5")
         d = tracker.to_dict()

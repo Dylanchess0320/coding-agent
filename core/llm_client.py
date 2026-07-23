@@ -64,28 +64,46 @@ class LLMClient:
 
         for attempt in range(self.max_retries + 1):
             try:
-                return await self._try_stream(payload, url, headers, attempt, stream_callback, think_callback)
+                return await self._try_stream(
+                    payload, url, headers, attempt, stream_callback, think_callback
+                )
             except httpx.HTTPStatusError as e:
                 result = self._handle_http_error(e, attempt)
                 if result is not None:
                     return result
-            except (httpx.ReadError, httpx.RemoteProtocolError, httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+            except (
+                httpx.ReadError,
+                httpx.RemoteProtocolError,
+                httpx.ConnectError,
+                httpx.ReadTimeout,
+                httpx.ConnectTimeout,
+            ) as e:
                 if attempt < self.max_retries:
-                    delay = self.base_delay * (2 ** attempt)
-                    print(f"\n  [RETRY] {type(e).__name__}: {e} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
+                    delay = self.base_delay * (2**attempt)
+                    print(
+                        f"\n  [RETRY] {type(e).__name__}: {e} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})"
+                    )
                     await asyncio.sleep(delay)
                 else:
                     print(f"\n  [WARN] Streaming failed after {self.max_retries + 1} attempts")
-                    return await self.chat_nonstreaming(messages, tools, stream_callback, think_callback)
+                    return await self.chat_nonstreaming(
+                        messages, tools, stream_callback, think_callback
+                    )
 
         return await self.chat_nonstreaming(messages, tools, stream_callback, think_callback)
 
-    def _build_payload(self, messages: list[dict], tools: list[dict] | None = None, stream: bool = True) -> dict:
+    def _build_payload(
+        self, messages: list[dict], tools: list[dict] | None = None, stream: bool = True
+    ) -> dict:
         """Build the API request payload."""
         payload = {
-            "model": self.model, "messages": messages,
-            "temperature": self.temperature, "max_tokens": self.max_tokens,
-            "tools": tools or [], "tool_choice": "auto", "stream": stream,
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "tools": tools or [],
+            "tool_choice": "auto",
+            "stream": stream,
         }
         if stream:
             payload["stream_options"] = {"include_usage": True}
@@ -97,14 +115,21 @@ class LLMClient:
     @staticmethod
     def _log_payload_size(payload: dict):
         import os
+
         if not os.environ.get("CODING_AGENT_DEBUG"):
             return
         msg_bytes = sum(len(json.dumps(m, ensure_ascii=False)) for m in payload.get("messages", []))
         tools_bytes = sum(len(json.dumps(t, ensure_ascii=False)) for t in payload.get("tools", []))
-        total_bytes = sum(len(json.dumps(v, ensure_ascii=False)) for v in payload.values() if v is not None)
-        print(f"\n  [DBG] payload: msgs={msg_bytes:,}B  tools={tools_bytes:,}B  total={total_bytes:,}B")
+        total_bytes = sum(
+            len(json.dumps(v, ensure_ascii=False)) for v in payload.values() if v is not None
+        )
+        print(
+            f"\n  [DBG] payload: msgs={msg_bytes:,}B  tools={tools_bytes:,}B  total={total_bytes:,}B"
+        )
 
-    async def _try_stream(self, payload, url, headers, attempt, stream_callback, think_callback) -> dict | None:
+    async def _try_stream(
+        self, payload, url, headers, attempt, stream_callback, think_callback
+    ) -> dict | None:
         """Execute one streaming attempt."""
         timeout = httpx.Timeout(connect=30.0, read=self.timeout_sec, write=30.0, pool=30.0)
         async with (
@@ -112,10 +137,14 @@ class LLMClient:
             client.stream("POST", url, headers=headers, json=payload) as resp,
         ):
             if resp.status_code in self.retryable_codes and attempt < self.max_retries:
-                delay = self.base_delay * (2 ** attempt)
-                print(f"\n  [RETRY] HTTP {resp.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
+                delay = self.base_delay * (2**attempt)
+                print(
+                    f"\n  [RETRY] HTTP {resp.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})"
+                )
                 await asyncio.sleep(delay)
-                raise httpx.HTTPStatusError(f"Retryable {resp.status_code}", request=resp.request, response=resp)
+                raise httpx.HTTPStatusError(
+                    f"Retryable {resp.status_code}", request=resp.request, response=resp
+                )
             if resp.status_code >= 400:
                 await resp.aread()
             resp.raise_for_status()
@@ -181,16 +210,21 @@ class LLMClient:
             message["tool_calls"] = []
             for idx in sorted(tool_calls_map.keys()):
                 tc = tool_calls_map[idx]
-                message["tool_calls"].append({
-                    "id": tc["id"] or f"call_{idx}", "type": "function",
-                    "function": {"name": tc["name"], "arguments": tc["arguments"]},
-                })
+                message["tool_calls"].append(
+                    {
+                        "id": tc["id"] or f"call_{idx}",
+                        "type": "function",
+                        "function": {"name": tc["name"], "arguments": tc["arguments"]},
+                    }
+                )
         return message
 
     def _handle_http_error(self, e: httpx.HTTPStatusError, attempt: int) -> dict | None:
         if e.response.status_code in self.retryable_codes and attempt < self.max_retries:
-            delay = self.base_delay * (2 ** attempt)
-            print(f"\n  [RETRY] HTTP {e.response.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
+            delay = self.base_delay * (2**attempt)
+            print(
+                f"\n  [RETRY] HTTP {e.response.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})"
+            )
             return None
         try:
             err_text = e.response.text[:500]
@@ -199,7 +233,9 @@ class LLMClient:
         print(f"\n  [ERR] API Error ({e.response.status_code}): {err_text}")
         return {"role": "assistant", "content": f"[API Error: {e.response.status_code}]"}
 
-    async def chat_nonstreaming(self, messages, tools=None, stream_callback=None, think_callback=None) -> dict | None:
+    async def chat_nonstreaming(
+        self, messages, tools=None, stream_callback=None, think_callback=None
+    ) -> dict | None:
         """Non-streaming fallback"""
         url = f"{self.base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -234,23 +270,37 @@ class LLMClient:
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     resp = await client.post(url, headers=headers, json=payload)
                     if resp.status_code in self.retryable_codes and attempt < self.max_retries:
-                        delay = self.base_delay * (2 ** attempt)
-                        print(f"\n  [RETRY] HTTP {resp.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
+                        delay = self.base_delay * (2**attempt)
+                        print(
+                            f"\n  [RETRY] HTTP {resp.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})"
+                        )
                         await asyncio.sleep(delay)
                         continue
                     resp.raise_for_status()
                     return resp
-            except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+            except (
+                httpx.RemoteProtocolError,
+                httpx.ConnectError,
+                httpx.ReadTimeout,
+                httpx.ConnectTimeout,
+            ) as e:
                 last_exc = e
                 if attempt < self.max_retries:
-                    delay = self.base_delay * (2 ** attempt)
-                    print(f"\n  [RETRY] Connection: {e} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
+                    delay = self.base_delay * (2**attempt)
+                    print(
+                        f"\n  [RETRY] Connection: {e} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})"
+                    )
                     await asyncio.sleep(delay)
                 else:
                     raise
             except httpx.HTTPStatusError as e:
-                if e.response.status_code not in self.retryable_codes or attempt >= self.max_retries:
-                    print(f"\n  [ERR] API Error ({e.response.status_code}): {e.response.text[:500]}")
+                if (
+                    e.response.status_code not in self.retryable_codes
+                    or attempt >= self.max_retries
+                ):
+                    print(
+                        f"\n  [ERR] API Error ({e.response.status_code}): {e.response.text[:500]}"
+                    )
                     raise
         if last_exc:
             raise last_exc

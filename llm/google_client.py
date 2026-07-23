@@ -1,10 +1,12 @@
 """Google Gemini API client with streaming."""
+
 from __future__ import annotations
 
 import json
+
 import httpx
 
-from . import LLMClient, LLMConfig, LLMResult
+from . import LLMClient, LLMResult
 
 
 class GoogleClient(LLMClient):
@@ -30,11 +32,16 @@ class GoogleClient(LLMClient):
                     text += part["text"]
                 if "functionCall" in part:
                     fc = part["functionCall"]
-                    tool_calls.append({
-                        "id": fc.get("name", "call_1"),
-                        "type": "function",
-                        "function": {"name": fc.get("name", ""), "arguments": json.dumps(fc.get("args", {}))},
-                    })
+                    tool_calls.append(
+                        {
+                            "id": fc.get("name", "call_1"),
+                            "type": "function",
+                            "function": {
+                                "name": fc.get("name", ""),
+                                "arguments": json.dumps(fc.get("args", {})),
+                            },
+                        }
+                    )
         usage = {
             "input_tokens": data.get("usageMetadata", {}).get("promptTokenCount", 0),
             "output_tokens": data.get("usageMetadata", {}).get("candidatesTokenCount", 0),
@@ -55,28 +62,30 @@ class GoogleClient(LLMClient):
         content_buf = ""
 
         timeout = httpx.Timeout(connect=15.0, read=300.0, write=15.0, pool=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, json=body) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: "):
-                        try:
-                            data = json.loads(line[6:])
-                        except json.JSONDecodeError:
-                            continue
-                        candidates = data.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            for part in parts:
-                                text = part.get("text", "")
-                                if text:
-                                    content_buf += text
-                                    if on_token:
-                                        on_token(text)
-                        usage = data.get("usageMetadata", {})
-                        if usage:
-                            self.cost_tracker.add_usage(usage, self.config.model)
-                            result.usage = usage
+        async with (
+            httpx.AsyncClient(timeout=timeout) as client,
+            client.stream("POST", url, json=body) as resp,
+        ):
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                    except json.JSONDecodeError:
+                        continue
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        for part in parts:
+                            text = part.get("text", "")
+                            if text:
+                                content_buf += text
+                                if on_token:
+                                    on_token(text)
+                    usage = data.get("usageMetadata", {})
+                    if usage:
+                        self.cost_tracker.add_usage(usage, self.config.model)
+                        result.usage = usage
 
         result.content = content_buf
         return result
@@ -95,18 +104,33 @@ class GoogleClient(LLMClient):
             elif role == "assistant":
                 contents.append({"role": "model", "parts": [{"text": content}]})
             elif role == "tool":
-                contents.append({
-                    "role": "function",
-                    "parts": [{"functionResponse": {"name": m.get("name", ""), "response": {"content": content}}}],
-                })
+                contents.append(
+                    {
+                        "role": "function",
+                        "parts": [
+                            {
+                                "functionResponse": {
+                                    "name": m.get("name", ""),
+                                    "response": {"content": content},
+                                }
+                            }
+                        ],
+                    }
+                )
         body = {"contents": contents}
         if system_instruction:
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
         if tools:
-            body["tools"] = [{"functionDeclarations": [
-                {"name": t.get("function", t).get("name", ""),
-                 "description": t.get("function", t).get("description", ""),
-                 "parameters": t.get("function", t).get("parameters", {})}
-                for t in tools
-            ]}]
+            body["tools"] = [
+                {
+                    "functionDeclarations": [
+                        {
+                            "name": t.get("function", t).get("name", ""),
+                            "description": t.get("function", t).get("description", ""),
+                            "parameters": t.get("function", t).get("parameters", {}),
+                        }
+                        for t in tools
+                    ]
+                }
+            ]
         return body

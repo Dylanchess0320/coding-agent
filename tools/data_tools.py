@@ -4,9 +4,8 @@ Data source tools: SQLite query, CSV, JSON, document reading, and secrets access
 
 from __future__ import annotations
 
-import json
-import os
 import csv
+import os
 import sqlite3
 from pathlib import Path
 
@@ -65,9 +64,7 @@ class SQLiteTool(ToolBase):
                         (table,),
                     )
                 else:
-                    cur = conn.execute(
-                        "SELECT sql FROM sqlite_master WHERE type='table'"
-                    )
+                    cur = conn.execute("SELECT sql FROM sqlite_master WHERE type='table'")
                 schemas = [row[0] for row in cur.fetchall() if row[0]]
                 conn.close()
                 return ToolOutput(
@@ -82,9 +79,7 @@ class SQLiteTool(ToolBase):
                 pages = cur.fetchone()[0]
                 cur = conn.execute("PRAGMA encoding")
                 encoding = cur.fetchone()[0]
-                cur = conn.execute(
-                    "SELECT count(*) FROM sqlite_master WHERE type='table'"
-                )
+                cur = conn.execute("SELECT count(*) FROM sqlite_master WHERE type='table'")
                 table_count = cur.fetchone()[0]
                 conn.close()
                 return ToolOutput(
@@ -94,9 +89,7 @@ class SQLiteTool(ToolBase):
 
             elif op == "query":
                 if not sql:
-                    return ToolOutput(
-                        text="SQL query is required for 'query' op", error=True
-                    )
+                    return ToolOutput(text="SQL query is required for 'query' op", error=True)
                 conn = sqlite3.connect(str(path))
                 conn.row_factory = sqlite3.Row
                 cur = conn.execute(sql)
@@ -118,9 +111,7 @@ class SQLiteTool(ToolBase):
 
             elif op == "execute":
                 if not sql:
-                    return ToolOutput(
-                        text="SQL statement is required for 'execute' op", error=True
-                    )
+                    return ToolOutput(text="SQL statement is required for 'execute' op", error=True)
                 conn = sqlite3.connect(str(path))
                 conn.execute(sql)
                 conn.commit()
@@ -171,9 +162,7 @@ class CSVTool(ToolBase):
             cols = list(rows[0].keys())
             lines = [" | ".join(cols), " | ".join("---" for _ in cols)]
             for row in rows:
-                lines.append(
-                    " | ".join(str(row.get(c, ""))[:80] for c in cols)
-                )
+                lines.append(" | ".join(str(row.get(c, ""))[:80] for c in cols))
 
             return ToolOutput(
                 text="\n".join(lines),

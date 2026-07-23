@@ -5,7 +5,7 @@ DateTime and Sleep utility tools.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
@@ -13,19 +13,21 @@ from .registry import register_tool
 
 class DateTimeTool(ToolBase):
     name = "DateTime"
-    description = "Get the current local date and time. Use instead of running 'date' or 'time' in a shell."
+    description = (
+        "Get the current local date and time. Use instead of running 'date' or 'time' in a shell."
+    )
     aliases = ["Now", "CurrentTime"]
     parameters = {
-        "format": {"type": "string", "description": "Optional strftime format string (e.g. '%Y-%m-%d %H:%M:%S'). Defaults to human-readable."},
+        "format": {
+            "type": "string",
+            "description": "Optional strftime format string (e.g. '%Y-%m-%d %H:%M:%S'). Defaults to human-readable.",
+        },
     }
 
     async def execute(self, format: str = "") -> ToolOutput:
         now = datetime.now()
-        if format:
-            text = now.strftime(format)
-        else:
-            text = now.strftime("%A, %B %d, %Y  %I:%M:%S %p")
-        return ToolOutput(text=text, title=f"Current Time", metadata={"iso": now.isoformat()})
+        text = now.strftime(format) if format else now.strftime("%A, %B %d, %Y  %I:%M:%S %p")
+        return ToolOutput(text=text, title="Current Time", metadata={"iso": now.isoformat()})
 
 
 class SleepTool(ToolBase):
@@ -33,7 +35,10 @@ class SleepTool(ToolBase):
     description = "Pause the agent for a specified number of seconds. Use for polling loops, rate limiting, or waiting for background processes."
     aliases = ["Wait", "Pause"]
     parameters = {
-        "seconds": {"type": "number", "description": "How long to sleep in seconds (min 0.1, max 300)"},
+        "seconds": {
+            "type": "number",
+            "description": "How long to sleep in seconds (min 0.1, max 300)",
+        },
         "reason": {"type": "string", "description": "Why the agent is sleeping (shown to user)"},
     }
 

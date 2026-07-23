@@ -5,9 +5,8 @@ These are the core tools every coding agent needs.
 
 from __future__ import annotations
 
-import os
-import re
 import fnmatch
+import re
 from pathlib import Path
 
 from .base import ToolBase, ToolOutput
@@ -19,11 +18,16 @@ class ReadTool(ToolBase):
     description = "Read the contents of a file. Supports line offsets and limits."
     parameters = {
         "file_path": {"type": "string", "description": "Absolute path to the file to read"},
-        "offset": {"type": "integer", "description": "Line number to start reading from (0-indexed)"},
+        "offset": {
+            "type": "integer",
+            "description": "Line number to start reading from (0-indexed)",
+        },
         "limit": {"type": "integer", "description": "Maximum number of lines to read"},
     }
 
-    async def execute(self, file_path: str, offset: int = 0, limit: int | None = None) -> ToolOutput:
+    async def execute(
+        self, file_path: str, offset: int = 0, limit: int | None = None
+    ) -> ToolOutput:
         try:
             path = Path(file_path).expanduser().resolve()
             if not path.exists():
@@ -44,7 +48,11 @@ class ReadTool(ToolBase):
             return ToolOutput(
                 text=output,
                 title=f"{path.name} ({len(lines)} lines, showing {offset}-{end})",
-                metadata={"file": str(path), "total_lines": len(lines), "shown_range": [offset, end]},
+                metadata={
+                    "file": str(path),
+                    "total_lines": len(lines),
+                    "shown_range": [offset, end],
+                },
             )
         except Exception as e:
             return ToolOutput(text=f"Error reading file: {e}", error=True)
@@ -74,6 +82,7 @@ class WriteTool(ToolBase):
             # Record checkpoint
             try:
                 from core.checkpoint import get_checkpoint_manager
+
                 cm = get_checkpoint_manager()
                 cm.record_edit(str(path), old_content or "", content)
             except Exception:
@@ -95,9 +104,15 @@ class EditTool(ToolBase):
     tracks_files = True
     parameters = {
         "file_path": {"type": "string", "description": "Absolute path to the file to edit"},
-        "old_string": {"type": "string", "description": "Text to replace (must be unique in the file)"},
+        "old_string": {
+            "type": "string",
+            "description": "Text to replace (must be unique in the file)",
+        },
         "new_string": {"type": "string", "description": "Text to replace it with"},
-        "replace_all": {"type": "boolean", "description": "Replace all occurrences instead of just the first"},
+        "replace_all": {
+            "type": "boolean",
+            "description": "Replace all occurrences instead of just the first",
+        },
     }
 
     async def execute(
@@ -128,6 +143,7 @@ class EditTool(ToolBase):
             path.write_text(new_content, encoding="utf-8")
             try:
                 from core.checkpoint import get_checkpoint_manager
+
                 cm = get_checkpoint_manager()
                 cm.record_edit(str(path), original, new_content)
             except Exception:
@@ -145,8 +161,14 @@ class GlobTool(ToolBase):
     name = "Glob"
     description = "Find files matching a glob pattern. Supports ** and * wildcards."
     parameters = {
-        "pattern": {"type": "string", "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')"},
-        "path": {"type": "string", "description": "Directory to search in (defaults to current directory)"},
+        "pattern": {
+            "type": "string",
+            "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')",
+        },
+        "path": {
+            "type": "string",
+            "description": "Directory to search in (defaults to current directory)",
+        },
     }
 
     async def execute(self, pattern: str, path: str = ".") -> ToolOutput:
@@ -177,7 +199,10 @@ class GrepTool(ToolBase):
         "pattern": {"type": "string", "description": "Regular expression pattern to search for"},
         "path": {"type": "string", "description": "Directory or file to search in"},
         "glob": {"type": "string", "description": "File glob pattern to filter (e.g., '*.py')"},
-        "output_mode": {"type": "string", "description": "Output format: content, files_with_matches, or count"},
+        "output_mode": {
+            "type": "string",
+            "description": "Output format: content, files_with_matches, or count",
+        },
     }
 
     async def execute(
@@ -198,7 +223,9 @@ class GrepTool(ToolBase):
             for f in sorted(files):
                 if not f.is_file():
                     continue
-                if any(p.name in {".git", "__pycache__", "node_modules", ".venv"} for p in f.parents):
+                if any(
+                    p.name in {".git", "__pycache__", "node_modules", ".venv"} for p in f.parents
+                ):
                     continue
                 try:
                     content = f.read_text(encoding="utf-8", errors="replace")
@@ -216,7 +243,7 @@ class GrepTool(ToolBase):
                     if output_mode == "files_with_matches":
                         results.append(str(f))
                     elif output_mode == "count":
-                        results.append(f"{str(f)}: {len(file_matches)} matches")
+                        results.append(f"{f!s}: {len(file_matches)} matches")
                     else:
                         results.append(f"\n  {f}:")
                         for lineno, line in file_matches[:20]:
@@ -225,14 +252,18 @@ class GrepTool(ToolBase):
                             results.append(f"    ... and {len(file_matches) - 20} more matches")
 
             if not results:
-                return ToolOutput(text=f"No matches for '{pattern}'", title=f"0 matches")
+                return ToolOutput(text=f"No matches for '{pattern}'", title="0 matches")
             output = "\n".join(results)
             if len(output) > 8000:
                 output = output[:8000] + "\n... [truncated]"
             return ToolOutput(
                 text=output,
                 title=f"{match_count} matches in {len(seen_files)} files",
-                metadata={"pattern": pattern, "match_count": match_count, "files_count": len(seen_files)},
+                metadata={
+                    "pattern": pattern,
+                    "match_count": match_count,
+                    "files_count": len(seen_files),
+                },
             )
         except re.error as e:
             return ToolOutput(text=f"Invalid regex: {e}", error=True)

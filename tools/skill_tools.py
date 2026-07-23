@@ -6,12 +6,12 @@ Skills are markdown files with YAML frontmatter that define reusable agent behav
 from __future__ import annotations
 
 import re
-import yaml
 from pathlib import Path
+
+import yaml
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
-
 
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
@@ -51,16 +51,18 @@ class SkillListTool(ToolBase):
     async def execute(self) -> ToolOutput:
         if not SKILLS_DIR.exists():
             return ToolOutput(text="No skills directory found.", title="Skills")
-        
+
         skills = []
         for f in sorted(SKILLS_DIR.glob("*.md")):
             parsed = _parse_skill(f)
             if parsed:
-                skills.append(f"  - **{parsed['name']}** v{parsed['version']}: {parsed['description']}")
+                skills.append(
+                    f"  - **{parsed['name']}** v{parsed['version']}: {parsed['description']}"
+                )
 
         if not skills:
             return ToolOutput(text="No skills found in skills/ directory.", title="Skills")
-        
+
         return ToolOutput(
             text="Available skills:\n\n" + "\n".join(skills),
             title=f"{len(skills)} Skills",

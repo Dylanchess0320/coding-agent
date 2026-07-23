@@ -5,16 +5,18 @@ Stores graph metadata alongside the in-memory graph for durability.
 Supports optional ONNX embedding for semantic search (see embeddings.py).
 """
 
-import re
+import contextlib
 import math
-from pathlib import Path
+import re
 from collections import Counter
+from pathlib import Path
 
-from .graph import MemoryGraph, MemoryEntry, Edge, EdgeKind
+from .graph import MemoryGraph
 
 # Optional ONNX embedding support
 try:
     from . import embeddings as _embeddings
+
     _HAS_EMBEDDINGS = _embeddings.is_available()
 except Exception:
     _embeddings = None
@@ -113,18 +115,14 @@ class MemoryStore:
         source: str = "",
         expires_in_hours: float = 0,
     ) -> str:
-        entry = self.graph.add_memory_raw(
-            content, tags=tags or [], source=source
-        )
+        entry = self.graph.add_memory_raw(content, tags=tags or [], source=source)
         self._rebuild_index()
         self._save()
 
         # Auto-embed single new entry
         if _HAS_EMBEDDINGS and _embeddings:
-            try:
+            with contextlib.suppress(Exception):
                 _embeddings.embed_all_memories(self.graph)
-            except Exception:
-                pass
 
         return entry.id
 
@@ -200,6 +198,7 @@ class MemoryStore:
     @classmethod
     def load(cls, store_dir: Path | None = None):
         from config import MEMORY_DIR
+
         dir_path = store_dir or MEMORY_DIR
         store = cls(dir_path)
         return store

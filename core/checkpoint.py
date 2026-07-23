@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .types import FileCheckpoint, CheckpointDiff
+from .types import CheckpointDiff, FileCheckpoint
 
 
 class CheckpointManager:
@@ -35,8 +35,11 @@ class CheckpointManager:
         return None
 
     def record_change(
-        self, file_path: str, content_before: str | None,
-        content_after: str | None = None, tool_call_id: str = "",
+        self,
+        file_path: str,
+        content_before: str | None,
+        content_after: str | None = None,
+        tool_call_id: str = "",
     ) -> FileCheckpoint:
         """Record a file change checkpoint."""
         cp_id = f"cp_{len(self.checkpoints)}_{datetime.now(timezone.utc).strftime('%H%M%S')}"
@@ -53,7 +56,9 @@ class CheckpointManager:
             self._persist_checkpoint(checkpoint)
         return checkpoint
 
-    def record_edit(self, file_path: str, old_content: str, new_content: str, tool_call_id: str = "") -> FileCheckpoint:
+    def record_edit(
+        self, file_path: str, old_content: str, new_content: str, tool_call_id: str = ""
+    ) -> FileCheckpoint:
         """Convenience: record an edit with both before and after."""
         return self.record_change(file_path, old_content, new_content, tool_call_id)
 
@@ -75,7 +80,9 @@ class CheckpointManager:
 
     def undo_to(self, checkpoint_id: str) -> list[CheckpointDiff]:
         """Undo to a specific checkpoint."""
-        idx = next((i for i, cp in enumerate(self.checkpoints) if cp.checkpoint_id == checkpoint_id), None)
+        idx = next(
+            (i for i, cp in enumerate(self.checkpoints) if cp.checkpoint_id == checkpoint_id), None
+        )
         if idx is None:
             return []
         diffs = []
@@ -95,17 +102,22 @@ class CheckpointManager:
         if cp is None:
             return None
         return self._compute_diff(
-            cp.file_path, cp.content_before,
+            cp.file_path,
+            cp.content_before,
             cp.content_after or self._read_current(cp.file_path),
         )
 
     def list_checkpoints(self) -> list[dict]:
         """List all checkpoints with summary info."""
         return [
-            {"id": cp.checkpoint_id, "file": cp.file_path, "timestamp": cp.timestamp,
-             "tool_call_id": cp.tool_call_id,
-             "size_before": len(cp.content_before) if cp.content_before else 0,
-             "size_after": len(cp.content_after) if cp.content_after else 0}
+            {
+                "id": cp.checkpoint_id,
+                "file": cp.file_path,
+                "timestamp": cp.timestamp,
+                "tool_call_id": cp.tool_call_id,
+                "size_before": len(cp.content_before) if cp.content_before else 0,
+                "size_after": len(cp.content_after) if cp.content_after else 0,
+            }
             for cp in self.checkpoints
         ]
 
@@ -119,14 +131,25 @@ class CheckpointManager:
         """Compute a unified diff between before and after."""
         before_lines = before.splitlines(keepends=True)
         after_lines = after.splitlines(keepends=True)
-        diff_lines = list(difflib.unified_diff(
-            before_lines, after_lines,
-            fromfile=f"a/{file_path}", tofile=f"b/{file_path}", n=3,
-        ))
+        diff_lines = list(
+            difflib.unified_diff(
+                before_lines,
+                after_lines,
+                fromfile=f"a/{file_path}",
+                tofile=f"b/{file_path}",
+                n=3,
+            )
+        )
         diff_text = "".join(diff_lines)
-        additions = sum(1 for l in diff_lines if l.startswith("+") and not l.startswith("+++"))
-        deletions = sum(1 for l in diff_lines if l.startswith("-") and not l.startswith("---"))
-        return CheckpointDiff(file_path=file_path, diff_text=diff_text, additions=additions, deletions=deletions)
+        additions = sum(
+            1 for line in diff_lines if line.startswith("+") and not line.startswith("+++")
+        )
+        deletions = sum(
+            1 for line in diff_lines if line.startswith("-") and not line.startswith("---")
+        )
+        return CheckpointDiff(
+            file_path=file_path, diff_text=diff_text, additions=additions, deletions=deletions
+        )
 
     @staticmethod
     def _read_current(file_path: str) -> str:
@@ -141,11 +164,19 @@ class CheckpointManager:
             return
         try:
             path = self._persist_dir / f"{cp.checkpoint_id}.json"
-            path.write_text(json.dumps({
-                "file_path": cp.file_path, "content_before": cp.content_before,
-                "content_after": cp.content_after, "timestamp": cp.timestamp,
-                "checkpoint_id": cp.checkpoint_id, "tool_call_id": cp.tool_call_id,
-            }, indent=2))
+            path.write_text(
+                json.dumps(
+                    {
+                        "file_path": cp.file_path,
+                        "content_before": cp.content_before,
+                        "content_after": cp.content_after,
+                        "timestamp": cp.timestamp,
+                        "checkpoint_id": cp.checkpoint_id,
+                        "tool_call_id": cp.tool_call_id,
+                    },
+                    indent=2,
+                )
+            )
         except Exception:
             pass
 
@@ -176,4 +207,3 @@ def get_checkpoint_manager(persist_dir: str | Path | None = None) -> CheckpointM
         store_dir = persist_dir or Path(__file__).resolve().parent.parent / "data" / "checkpoints"
         _checkpoint_manager = CheckpointManager(store_dir)
     return _checkpoint_manager
-

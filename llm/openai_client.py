@@ -1,10 +1,12 @@
 """OpenAI API client with streaming support."""
+
 from __future__ import annotations
 
 import json
+
 import httpx
 
-from . import LLMClient, LLMConfig, LLMResult
+from . import LLMClient, LLMResult
 
 
 class OpenAIClient(LLMClient):
@@ -28,7 +30,8 @@ class OpenAIClient(LLMClient):
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 f"{self.config.base_url}/chat/completions",
-                headers=headers, json=body,
+                headers=headers,
+                json=body,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -63,39 +66,43 @@ class OpenAIClient(LLMClient):
         content_buf = ""
 
         timeout = httpx.Timeout(connect=15.0, read=300.0, write=15.0, pool=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST", f"{self.config.base_url}/chat/completions",
-                headers=headers, json=body,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    payload = line[6:].strip()
-                    if payload == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(payload)
-                    except json.JSONDecodeError:
-                        continue
-                    if chunk.get("usage"):
-                        self.cost_tracker.add_usage(chunk["usage"], self.config.model)
-                        result.usage = chunk["usage"]
-                    choice = chunk.get("choices", [{}])[0]
-                    delta = choice.get("delta", {})
-                    content = delta.get("content", "")
-                    if content:
-                        content_buf += content
-                        if on_token:
-                            on_token(content)
-                    if delta.get("tool_calls"):
-                        if not result.tool_calls:
-                            result.tool_calls = []
-                        result.tool_calls.append(delta["tool_calls"])
-                    finish = choice.get("finish_reason", "")
-                    if finish:
-                        result.finish_reason = finish
+        async with (
+            httpx.AsyncClient(timeout=timeout) as client,
+            client.stream(
+                "POST",
+                f"{self.config.base_url}/chat/completions",
+                headers=headers,
+                json=body,
+            ) as resp,
+        ):
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                payload = line[6:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                if chunk.get("usage"):
+                    self.cost_tracker.add_usage(chunk["usage"], self.config.model)
+                    result.usage = chunk["usage"]
+                choice = chunk.get("choices", [{}])[0]
+                delta = choice.get("delta", {})
+                content = delta.get("content", "")
+                if content:
+                    content_buf += content
+                    if on_token:
+                        on_token(content)
+                if delta.get("tool_calls"):
+                    if not result.tool_calls:
+                        result.tool_calls = []
+                    result.tool_calls.append(delta["tool_calls"])
+                finish = choice.get("finish_reason", "")
+                if finish:
+                    result.finish_reason = finish
 
         result.content = content_buf
         return result

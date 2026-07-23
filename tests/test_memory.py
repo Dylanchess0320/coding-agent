@@ -1,4 +1,5 @@
 """Tests for the memory store."""
+
 from __future__ import annotations
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 @pytest.fixture
 def store(tmp_path):
     from memory.store import MemoryStore
+
     s = MemoryStore(tmp_path / "mem_test")
     s.clear()
     return s
@@ -59,6 +61,7 @@ class TestMemoryStore:
 
     def test_persistence(self, tmp_path):
         from memory.store import MemoryStore
+
         path = tmp_path / "mem"
         s1 = MemoryStore(path)
         s1.add(content="Persistent fact", source="test")

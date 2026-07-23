@@ -13,16 +13,12 @@ Data model:
 """
 
 import json
-import re
-import time
 import math
-from pathlib import Path
+import time
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from collections import defaultdict, deque
-from dataclasses import dataclass, field, asdict
-from typing import Optional
 from enum import Enum
-
+from pathlib import Path
 
 # ── Constants ──────────────────────────────────────────────────────────
 
@@ -34,10 +30,11 @@ LEGACY_EMBEDDING_MODEL = "minilm-l6-v2"
 
 # ── Enums ──────────────────────────────────────────────────────────────
 
+
 class TrustLevel(str, Enum):
-    HIGH = "high"      # User explicitly stated
+    HIGH = "high"  # User explicitly stated
     MEDIUM = "medium"  # Observed from behavior
-    LOW = "low"        # Inferred by the agent
+    LOW = "low"  # Inferred by the agent
 
     @classmethod
     def default(cls):
@@ -65,6 +62,7 @@ class EdgeKind(str, Enum):
 
 # ── Core Data Classes ──────────────────────────────────────────────────
 
+
 @dataclass
 class Reinforcement:
     session_id: str
@@ -89,14 +87,14 @@ class MemoryEntry:
     created_at: str = ""  # ISO format
     updated_at: str = ""
     access_count: int = 0
-    source: Optional[str] = None
+    source: str | None = None
     trust: str = "medium"
     strength: int = 1
     active: bool = True
-    superseded_by: Optional[str] = None
+    superseded_by: str | None = None
     reinforcements: list = field(default_factory=list)
-    embedding: Optional[list] = None
-    embedding_model: Optional[str] = None
+    embedding: list | None = None
+    embedding_model: str | None = None
     confidence: float = 1.0
     metadata: dict = field(default_factory=dict)
 
@@ -128,7 +126,7 @@ class MemoryEntry:
     @classmethod
     def from_dict(cls, d):
         # Handle reinforcements
-        if "reinforcements" in d and d["reinforcements"]:
+        if d.get("reinforcements"):
             d["reinforcements"] = [
                 Reinforcement.from_dict(r) if isinstance(r, dict) else r
                 for r in d["reinforcements"]
@@ -146,7 +144,7 @@ class MemoryEntry:
 class TagEntry:
     id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     count: int = 0
     created_at: str = ""
 
@@ -170,7 +168,7 @@ class TagEntry:
 @dataclass
 class ClusterEntry:
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     centroid: list = field(default_factory=list)
     member_count: int = 0
     created_at: str = ""
@@ -221,7 +219,7 @@ class Edge:
 
 @dataclass
 class GraphMetadata:
-    last_cluster_update: Optional[str] = None
+    last_cluster_update: str | None = None
     retrieval_count: int = 0
     link_discovery_count: int = 0
 
@@ -235,13 +233,14 @@ class GraphMetadata:
 
 # ── Memory Graph ───────────────────────────────────────────────────────
 
+
 def _new_memory_id() -> str:
     ts = int(time.time() * 1000)
     rand = int.from_bytes(os.urandom(6), "big")
     return f"mem_{ts}_{rand}"
 
 
-import os  # noqa: E402
+import os
 
 
 class MemoryGraph:
@@ -252,7 +251,7 @@ class MemoryGraph:
         self.memories: dict[str, MemoryEntry] = {}
         self.tags: dict[str, TagEntry] = {}
         self.clusters: dict[str, ClusterEntry] = {}
-        self.edges: dict[str, list[Edge]] = {}       # source_id -> [Edge]
+        self.edges: dict[str, list[Edge]] = {}  # source_id -> [Edge]
         self.reverse_edges: dict[str, list[str]] = {}  # target_id -> [source_id]
         self.metadata = GraphMetadata()
 
@@ -272,7 +271,7 @@ class MemoryGraph:
         path.write_text(json.dumps(data, indent=2))
 
     @classmethod
-    def load(cls, path: Path) -> "MemoryGraph":
+    def load(cls, path: Path) -> MemoryGraph:
         if not path.exists():
             return cls()
         try:
@@ -281,18 +280,10 @@ class MemoryGraph:
             return cls()
 
         g = cls()
-        g.memories = {
-            k: MemoryEntry.from_dict(v) for k, v in data.get("memories", {}).items()
-        }
-        g.tags = {
-            k: TagEntry.from_dict(v) for k, v in data.get("tags", {}).items()
-        }
-        g.clusters = {
-            k: ClusterEntry.from_dict(v) for k, v in data.get("clusters", {}).items()
-        }
-        g.edges = {
-            k: [Edge.from_dict(e) for e in v] for k, v in data.get("edges", {}).items()
-        }
+        g.memories = {k: MemoryEntry.from_dict(v) for k, v in data.get("memories", {}).items()}
+        g.tags = {k: TagEntry.from_dict(v) for k, v in data.get("tags", {}).items()}
+        g.clusters = {k: ClusterEntry.from_dict(v) for k, v in data.get("clusters", {}).items()}
+        g.edges = {k: [Edge.from_dict(e) for e in v] for k, v in data.get("edges", {}).items()}
         g.reverse_edges = dict(data.get("reverse_edges", {}))
         g.metadata = GraphMetadata.from_dict(data.get("metadata", {}))
         g.graph_version = data.get("graph_version", 1)
@@ -318,9 +309,14 @@ class MemoryGraph:
         self.memories[mem_id] = entry
         return mem_id
 
-    def add_memory_raw(self, content: str, category: str = "general",
-                       tags: list[str] = None, source: str = None,
-                       trust: str = "medium") -> MemoryEntry:
+    def add_memory_raw(
+        self,
+        content: str,
+        category: str = "general",
+        tags: list[str] | None = None,
+        source: str | None = None,
+        trust: str = "medium",
+    ) -> MemoryEntry:
         """Convenience: create and add a memory entry."""
         tags = tags or []
         entry = MemoryEntry(
@@ -334,14 +330,14 @@ class MemoryGraph:
         self.add_memory(entry)
         return entry
 
-    def get_memory(self, mem_id: str) -> Optional[MemoryEntry]:
+    def get_memory(self, mem_id: str) -> MemoryEntry | None:
         entry = self.memories.get(mem_id)
         if entry:
             entry.access_count += 1
             entry.updated_at = datetime.now(timezone.utc).isoformat()
         return entry
 
-    def remove_memory(self, mem_id: str) -> Optional[MemoryEntry]:
+    def remove_memory(self, mem_id: str) -> MemoryEntry | None:
         """Remove a memory and its associated edges."""
         # Remove outgoing edges
         if mem_id in self.edges:
@@ -382,7 +378,7 @@ class MemoryGraph:
         if tag_id not in self.tags:
             self.tags[tag_id] = TagEntry.new(name)
 
-    def get_or_create_tag(self, name: str, description: str = None) -> TagEntry:
+    def get_or_create_tag(self, name: str, description: str | None = None) -> TagEntry:
         self._ensure_tag(name)
         tag_id = f"tag:{name}"
         if description and self.tags[tag_id].description is None:
@@ -420,12 +416,13 @@ class MemoryGraph:
     def get_edges(self, node_id: str) -> list[Edge]:
         return self.edges.get(node_id, [])
 
-    def remove_edge(self, source: str, target: str, kind: Optional[EdgeKind] = None) -> bool:
+    def remove_edge(self, source: str, target: str, kind: EdgeKind | None = None) -> bool:
         if source not in self.edges:
             return False
         before = len(self.edges[source])
         self.edges[source] = [
-            e for e in self.edges[source]
+            e
+            for e in self.edges[source]
             if not (e.target == target and (kind is None or e.kind == kind))
         ]
         removed = before - len(self.edges[source]) > 0
@@ -463,7 +460,7 @@ class MemoryGraph:
         scores.sort(key=lambda x: x[1], reverse=True)
         return [(self.memories[mem_id], score) for mem_id, score in scores[:limit]]
 
-    def search_by_tag(self, tag: str) -> list[tuple[MemoryNode, float]]:
+    def search_by_tag(self, tag: str) -> list[tuple[MemoryEntry, float]]:
         scores = []
         for mem_id, mem in self.memories.items():
             score = 0.0
@@ -476,13 +473,13 @@ class MemoryGraph:
         scores.sort(key=lambda x: x[1], reverse=True)
         return [(self.memories[mem_id], score) for mem_id, score in scores]
 
-    def bfs(self, start_id: str, max_depth: int = 2) -> list[tuple[MemoryNode, int]]:
+    def bfs(self, start_id: str, max_depth: int = 2) -> list[tuple[MemoryEntry, int]]:
         """BFS from start, returning (node, depth) tuples up to max_depth."""
         if start_id not in self.memories:
             return []
         visited = {start_id}
         queue = [(start_id, 0)]
-        results: list[tuple[MemoryNode, int]] = []
+        results: list[tuple[MemoryEntry, int]] = []
         while queue:
             current, depth = queue.pop(0)
             if current in self.memories:
@@ -501,13 +498,11 @@ class MemoryGraph:
         if not self.memories:
             return "No memories stored."
         lines = [f"Memory Graph: {len(self.memories)} entries"]
-        for mem_id, entry in self.memories.items():
+        for _mem_id, entry in self.memories.items():
             tags = ", ".join(entry.tags) if entry.tags else "none"
             preview = entry.content[:80].replace("\n", " ")
             lines.append(f"  [{entry.id}] {preview}  (tags: {tags})")
         return "\n".join(lines)
-
-
 
 
 # -- Singleton accessor ---------------------------------------------------

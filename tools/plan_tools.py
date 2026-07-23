@@ -6,7 +6,6 @@ Enables read-only exploration phase before writing code.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
@@ -59,7 +58,10 @@ class ExitPlanModeTool(ToolBase):
     description = "Exit plan mode and present your implementation plan to the user for approval. Only call when you have a complete, concrete plan ready."
     aliases = ["ExitPlan", "ProposePlan"]
     parameters = {
-        "plan": {"type": "string", "description": "Your complete implementation plan. Be specific: list files, functions, and approaches."},
+        "plan": {
+            "type": "string",
+            "description": "Your complete implementation plan. Be specific: list files, functions, and approaches.",
+        },
     }
 
     async def execute(self, plan: str) -> ToolOutput:

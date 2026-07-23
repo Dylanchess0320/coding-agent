@@ -4,6 +4,7 @@ Tools register themselves by importing this module and calling register().
 """
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -14,16 +15,16 @@ class ToolRegistry:
     """Global registry for all tool plugins."""
 
     def __init__(self):
-        self._tools: dict[str, "ToolBase"] = {}
+        self._tools: dict[str, ToolBase] = {}
         self._aliases: dict[str, str] = {}
 
-    def register(self, tool: "ToolBase"):
+    def register(self, tool: ToolBase):
         name = tool.name.lower()
         self._tools[name] = tool
         for alias in tool.aliases:
             self._aliases[alias.lower()] = name
 
-    def get(self, name: str) -> "ToolBase | None":
+    def get(self, name: str) -> ToolBase | None:
         key = name.lower()
         if key in self._tools:
             return self._tools[key]
@@ -60,5 +61,5 @@ class ToolRegistry:
 registry = ToolRegistry()
 
 
-def register_tool(tool: "ToolBase"):
+def register_tool(tool: ToolBase):
     registry.register(tool)

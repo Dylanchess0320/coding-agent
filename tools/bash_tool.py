@@ -6,10 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import re
 import os
 import platform
-from pathlib import Path
+import re
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
@@ -30,22 +29,101 @@ BLOCKED_PATTERNS = [
 
 # Allowlist for common dev commands
 ALLOWED_PREFIXES = [
-    "ls", "dir", "cat", "echo", "pwd", "cd", "mkdir",
-    "python", "python3", "py", "node", "npm", "npx", "pip",
-    "git", "gh", "curl", "wget", "dotnet", "cargo", "go",
-    "javac", "java", "gcc", "g++", "make", "cmake", "ninja",
-    "docker", "docker-compose", "kubectl", "helm",
-    "tar", "zip", "unzip", "gzip", "gunzip",
-    "cp", "copy", "mv", "move", "ren", "rename",
-    "find", "grep", "rg", "fd", "awk", "sed", "sort", "uniq",
-    "head", "tail", "wc", "diff", "md5sum", "sha256sum",
-    "chmod", "chown", "stat", "file", "which", "where",
-    "df", "du", "free", "top", "ps", "kill", "tasklist", "taskkill",
-    "ping", "nslookup", "ipconfig", "ifconfig", "netstat",
-    "ssh", "scp", "rsync",
-    "type", "set", "export", "printenv", "env",
-    "npx", "yarn", "pnpm", "tsc", "eslint", "prettier",
-    "code", "notepad", "start", "open", "xdg-open",
+    "ls",
+    "dir",
+    "cat",
+    "echo",
+    "pwd",
+    "cd",
+    "mkdir",
+    "python",
+    "python3",
+    "py",
+    "node",
+    "npm",
+    "npx",
+    "pip",
+    "git",
+    "gh",
+    "curl",
+    "wget",
+    "dotnet",
+    "cargo",
+    "go",
+    "javac",
+    "java",
+    "gcc",
+    "g++",
+    "make",
+    "cmake",
+    "ninja",
+    "docker",
+    "docker-compose",
+    "kubectl",
+    "helm",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "cp",
+    "copy",
+    "mv",
+    "move",
+    "ren",
+    "rename",
+    "find",
+    "grep",
+    "rg",
+    "fd",
+    "awk",
+    "sed",
+    "sort",
+    "uniq",
+    "head",
+    "tail",
+    "wc",
+    "diff",
+    "md5sum",
+    "sha256sum",
+    "chmod",
+    "chown",
+    "stat",
+    "file",
+    "which",
+    "where",
+    "df",
+    "du",
+    "free",
+    "top",
+    "ps",
+    "kill",
+    "tasklist",
+    "taskkill",
+    "ping",
+    "nslookup",
+    "ipconfig",
+    "ifconfig",
+    "netstat",
+    "ssh",
+    "scp",
+    "rsync",
+    "type",
+    "set",
+    "export",
+    "printenv",
+    "env",
+    "npx",
+    "yarn",
+    "pnpm",
+    "tsc",
+    "eslint",
+    "prettier",
+    "code",
+    "notepad",
+    "start",
+    "open",
+    "xdg-open",
 ]
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -57,13 +135,19 @@ class BashTool(ToolBase):
     aliases = ["Shell", "Cmd", "Run"]
     parameters = {
         "command": {"type": "string", "description": "The shell command to execute"},
-        "description": {"type": "string", "description": "Clear description of what this command does"},
-        "timeout": {"type": "integer", "description": "Timeout in milliseconds (default 120000, max 600000)"},
+        "description": {
+            "type": "string",
+            "description": "Clear description of what this command does",
+        },
+        "timeout": {
+            "type": "integer",
+            "description": "Timeout in milliseconds (default 120000, max 600000)",
+        },
         "cwd": {"type": "string", "description": "Working directory for the command"},
     }
 
     def _is_safe(self, cmd: str) -> tuple[bool, str]:
-        cmd_lower = cmd.strip().lower()
+        cmd.strip().lower()
 
         for pattern in BLOCKED_PATTERNS:
             if re.search(pattern, cmd, re.IGNORECASE):
@@ -80,7 +164,10 @@ class BashTool(ToolBase):
         if first_word.startswith("/") or (IS_WINDOWS and first_word[1:2] == ":\\"):
             return True, ""
 
-        return False, f"Command prefix '{first_word}' not in allowlist. Wrap unsafe commands in a script file."
+        return (
+            False,
+            f"Command prefix '{first_word}' not in allowlist. Wrap unsafe commands in a script file.",
+        )
 
     async def execute(
         self, command: str, description: str = "", timeout: int = 120000, cwd: str = ""
@@ -105,16 +192,16 @@ class BashTool(ToolBase):
                 )
             else:
                 proc = await asyncio.create_subprocess_exec(
-                    "bash", "-c", command,
+                    "bash",
+                    "-c",
+                    command,
                     stdin=asyncio.subprocess.DEVNULL,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=work_dir,
                 )
 
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout_sec
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
         except asyncio.TimeoutError:
             # Kill the runaway process so it does not leak
             with contextlib.suppress(Exception):
@@ -163,8 +250,14 @@ class PowerShellTool(ToolBase):
     description = "Execute a PowerShell command and return its output."
     aliases = ["PS", "Pwsh"]
     parameters = {
-        "command": {"type": "string", "description": "PowerShell command or script block to execute"},
-        "description": {"type": "string", "description": "Human-readable description of what this command does"},
+        "command": {
+            "type": "string",
+            "description": "PowerShell command or script block to execute",
+        },
+        "description": {
+            "type": "string",
+            "description": "Human-readable description of what this command does",
+        },
         "timeout": {"type": "integer", "description": "Timeout in milliseconds (default 120000)"},
     }
 
@@ -174,14 +267,15 @@ class PowerShellTool(ToolBase):
         timeout_sec = min(timeout, 600000) / 1000
         try:
             proc = await asyncio.create_subprocess_exec(
-                "powershell.exe", "-NoProfile", "-Command", command,
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                command,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout_sec
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
         except asyncio.TimeoutError:
             # Kill the runaway process so it does not leak
             with contextlib.suppress(Exception):

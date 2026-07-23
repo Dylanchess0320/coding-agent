@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-from tools.registry import ToolRegistry, register_tool
 from tools.base import ToolBase
+from tools.registry import ToolRegistry, register_tool
 
 
 class _MockTool(ToolBase):
@@ -22,6 +21,7 @@ class _MockTool(ToolBase):
 
     async def execute(self, **kwargs):
         from tools.base import ToolOutput
+
         return ToolOutput(text="mock result")
 
 
@@ -35,6 +35,7 @@ class _MockToolNoAliases(ToolBase):
 
     async def execute(self, **kwargs):
         from tools.base import ToolOutput
+
         return ToolOutput(text="simple result")
 
 
@@ -133,6 +134,7 @@ class TestToolRegistry:
     def test_global_registry_singleton(self):
         """Test that the global registry is a singleton."""
         from tools.registry import registry
+
         assert registry is not None
         assert isinstance(registry, ToolRegistry)
 

@@ -126,7 +126,7 @@ def _resolve_provider(provider_hint: str | None, model_name: str) -> dict:
     model_lower = (model_name or "").lower()
     for p in ("openai", "anthropic", "google", "ollama"):
         if model_lower.startswith(p):
-            return _resolve_provider(p, model_name[len(p) + 1:].strip())
+            return _resolve_provider(p, model_name[len(p) + 1 :].strip())
 
     # Default: DeepSeek current config
     api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("CODING_AGENT_API_KEY", "")
@@ -153,24 +153,29 @@ def _switch_model(agent, provider: str | None = None, model_name: str = ""):
     model = new_cfg["model"]
 
     # Update the agent via its public API (no poking at internals)
-    agent.switch_provider(LLMConfig(
-        api_key=new_cfg["api_key"],
-        base_url=new_cfg["base_url"],
-        model=model,
-        temperature=agent.temperature,
-        max_tokens=agent.max_tokens,
-        provider=provider,
-        thinking=new_cfg.get("thinking", False),
-    ))
+    agent.switch_provider(
+        LLMConfig(
+            api_key=new_cfg["api_key"],
+            base_url=new_cfg["base_url"],
+            model=model,
+            temperature=agent.temperature,
+            max_tokens=agent.max_tokens,
+            provider=provider,
+            thinking=new_cfg.get("thinking", False),
+        )
+    )
 
     # Update the UI session info
     ui.set_session_info(
-        project_name=agent._project_info.name if agent._project_info and not agent._project_info.is_empty() else "",
+        project_name=(
+            agent._project_info.name
+            if agent._project_info and not agent._project_info.is_empty()
+            else ""
+        ),
         provider=agent.provider_name,
         model=model,
     )
     ui.success(f"Switched to {agent.provider_name} / {model}")
-
 
 
 # ── Slash commands ────────────────────────────────────────────────────
@@ -181,6 +186,7 @@ def _switch_model(agent, provider: str | None = None, model_name: str = ""):
 def _console_approval(request) -> type(None):
     """Prompt user for tool approval in REPL. Returns None to proceed; returning a dict blocks the tool."""
     from core.types import ToolPermissionLevel
+
     preview = request.tool_args.get("command", request.tool_name)[:120]
     print(f"\n  [APPROVAL] {request.tool_name}: {preview}")
     print("  Approve? [y]es/[n]o/[a]lways-allow: ", end="")
@@ -193,7 +199,11 @@ def _console_approval(request) -> type(None):
         return None
     if ans in ("y", "yes"):
         return None
-    return {"role": "tool", "tool_call_id": request.call_id, "content": "Tool execution denied by user."}
+    return {
+        "role": "tool",
+        "tool_call_id": request.call_id,
+        "content": "Tool execution denied by user.",
+    }
 
 
 async def handle_command(agent: CodingAgent, cmd: str) -> bool:
@@ -214,7 +224,11 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
         agent.reset()
         # Also clear the terminal screen so you truly start fresh
         os.system("cls" if os.name == "nt" else "clear")
-        project_name = agent._project_info.name if agent._project_info and not agent._project_info.is_empty() else ""
+        project_name = (
+            agent._project_info.name
+            if agent._project_info and not agent._project_info.is_empty()
+            else ""
+        )
         ui.set_session_info(
             project_name=project_name,
             provider=agent.provider_name,
@@ -223,7 +237,9 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
         ui.enhanced_banner()
 
     elif cmd == "history":
-        ui.markdown(f"**Conversation:** {agent.conversation_id}\n**Turns:** {agent.turn_count}\n**Messages:** {len(agent.messages)}")
+        ui.markdown(
+            f"**Conversation:** {agent.conversation_id}\n**Turns:** {agent.turn_count}\n**Messages:** {len(agent.messages)}"
+        )
 
     elif cmd == "tools":
         ui.show_tools(sorted(registry.list_tools()))
@@ -231,6 +247,7 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
     elif cmd == "memory":
         try:
             from memory.store import get_memory
+
             ui.markdown(get_memory().summarize())
         except Exception as e:
             ui.error(f"Memory error: {e}")
@@ -245,20 +262,36 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
             for p in ("openai", "anthropic", "google", "ollama", "deepseek", "zai", "openrouter"):
                 if raw.lower().startswith(p + " "):
                     provider = p
-                    desired = raw[len(p) + 1:].strip()
+                    desired = raw[len(p) + 1 :].strip()
                     break
             _switch_model(agent, provider=provider, model_name=desired)
         else:
             ui.info(f"Model: {agent.model}")
-            ui.show_models([
-                ("OpenAI", ["gpt-4o", "gpt-4o-mini", "o1-preview", "o1-mini"]),
-                ("Anthropic", ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-haiku-20241022"]),
-                ("Google", ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]),
-                ("Ollama", ["codellama", "llama3.1", "mistral", "phi3"]),
-                ("DeepSeek", ["deepseek-chat", "deepseek-reasoner", "deepseek-coder"]),
-                ("Z.ai", ["glm-4.6", "glm-4.5", "glm-4.5-air"]),
-                ("OpenRouter", ["deepseek/deepseek-chat-v3.1", "anthropic/claude-sonnet-4", "google/gemini-2.0-flash-001"]),
-            ])
+            ui.show_models(
+                [
+                    ("OpenAI", ["gpt-4o", "gpt-4o-mini", "o1-preview", "o1-mini"]),
+                    (
+                        "Anthropic",
+                        [
+                            "claude-sonnet-4-20250514",
+                            "claude-opus-4-20250514",
+                            "claude-3-5-haiku-20241022",
+                        ],
+                    ),
+                    ("Google", ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]),
+                    ("Ollama", ["codellama", "llama3.1", "mistral", "phi3"]),
+                    ("DeepSeek", ["deepseek-chat", "deepseek-reasoner", "deepseek-coder"]),
+                    ("Z.ai", ["glm-4.6", "glm-4.5", "glm-4.5-air"]),
+                    (
+                        "OpenRouter",
+                        [
+                            "deepseek/deepseek-chat-v3.1",
+                            "anthropic/claude-sonnet-4",
+                            "google/gemini-2.0-flash-001",
+                        ],
+                    ),
+                ]
+            )
 
     elif cmd == "refresh":
         invalidate_cache()
@@ -275,6 +308,7 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
 
     elif cmd == "undo":
         from core.checkpoint import get_checkpoint_manager
+
         cm = get_checkpoint_manager()
         diff = cm.undo_last()
         if diff:
@@ -330,6 +364,7 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
 
 # ── Main application ──────────────────────────────────────────────────
 
+
 async def run_one_shot(agent: CodingAgent, message: str):
     """Single query mode with streaming."""
     agent.stream_callback = ui.stream_token
@@ -372,11 +407,16 @@ async def run_one_shot_json(agent: CodingAgent, message: str):
     sys.stdout.write(chr(10))
     sys.stdout.flush()
 
+
 async def run_repl(agent: CodingAgent):
     """Interactive REPL with streaming and session info."""
 
     # Show enhanced banner with project info
-    project_name = agent._project_info.name if agent._project_info and not agent._project_info.is_empty() else ""
+    project_name = (
+        agent._project_info.name
+        if agent._project_info and not agent._project_info.is_empty()
+        else ""
+    )
     ui.set_session_info(
         project_name=project_name,
         provider=agent.provider_name,
@@ -388,7 +428,7 @@ async def run_repl(agent: CodingAgent):
         try:
             user_input = ui.prompt()
         except (KeyboardInterrupt, EOFError):
-            cost = agent.cost_tracker.summary() if hasattr(agent, 'cost_tracker') else ""
+            cost = agent.cost_tracker.summary() if hasattr(agent, "cost_tracker") else ""
             ui.goodbye(cost_summary=cost)
             break
 
@@ -400,7 +440,7 @@ async def run_repl(agent: CodingAgent):
         if user_input.startswith("/"):
             should_exit = await handle_command(agent, user_input)
             if should_exit:
-                cost = agent.cost_tracker.summary() if hasattr(agent, 'cost_tracker') else ""
+                cost = agent.cost_tracker.summary() if hasattr(agent, "cost_tracker") else ""
                 ui.goodbye(cost_summary=cost)
                 break
             continue
@@ -422,6 +462,7 @@ async def run_repl(agent: CodingAgent):
 
 
 # ── Entry point ────────────────────────────────────────────────────────
+
 
 def main():
     # Parse CLI args
@@ -474,7 +515,8 @@ def main():
             print("LuckyD Code 2.1.0")
             sys.exit(0)
         elif args[i] == "--help":
-            print("""
+            print(
+                """
 LuckyD Code — AI Coding Agent  v2.1.0
 
 Usage:
@@ -501,7 +543,8 @@ Environment:
   <PROVIDER>_API_KEY   Set in .env for your provider
   CODING_AGENT_PROVIDER Explicit provider override
   CODING_AGENT_AUTO_APPROVE=1   Bypass all tool approvals
-""")
+"""
+            )
             sys.exit(0)
         elif args[i] == "--json":
             json_mode = True
@@ -540,10 +583,12 @@ Environment:
         hook.auto_approve_all = True
         register_plugin(hook)
     else:
-        register_plugin(ApprovalHook(
-            approval_callback=_console_approval,
-            session_id=agent.conversation_id,
-        ))
+        register_plugin(
+            ApprovalHook(
+                approval_callback=_console_approval,
+                session_id=agent.conversation_id,
+            )
+        )
 
     # Connect MCP servers
     mcp_manager = MCPManager()

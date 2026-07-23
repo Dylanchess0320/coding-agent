@@ -5,8 +5,6 @@ Git integration tools: status, diff, log, commit, add, push, branch, PR.
 from __future__ import annotations
 
 import asyncio
-import os
-from pathlib import Path
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
@@ -15,7 +13,8 @@ from .registry import register_tool
 async def _run_git(args: list[str], cwd: str = ".") -> tuple[int, str, str]:
     try:
         proc = await asyncio.create_subprocess_exec(
-            "git", *args,
+            "git",
+            *args,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -65,8 +64,9 @@ class GitDiff(ToolBase):
             return ToolOutput(text=err or "git error", error=True)
         if not out.strip():
             return ToolOutput(text="No changes.", title="git diff")
-        return ToolOutput(text=out[:8000], title="git diff",
-                          metadata={"lines": len(out.splitlines())})
+        return ToolOutput(
+            text=out[:8000], title="git diff", metadata={"lines": len(out.splitlines())}
+        )
 
 
 class GitLog(ToolBase):
@@ -78,9 +78,7 @@ class GitLog(ToolBase):
     }
 
     async def execute(self, count: int = 10) -> ToolOutput:
-        code, out, err = await _run_git([
-            "log", f"-{count}", "--oneline", "--decorate", "--graph"
-        ])
+        code, out, err = await _run_git(["log", f"-{count}", "--oneline", "--decorate", "--graph"])
         if code != 0:
             return ToolOutput(text=err or "git error", error=True)
         return ToolOutput(text=out.strip() or "(no commits)", title=f"Last {count} commits")
@@ -106,7 +104,11 @@ class GitAdd(ToolBase):
     description = "Stage files for commit."
     aliases = ["gita", "add"]
     parameters = {
-        "files": {"type": "array", "items": {"type": "string"}, "description": "Files to stage (default: all)"},
+        "files": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Files to stage (default: all)",
+        },
     }
 
     async def execute(self, files: list[str] | None = None) -> ToolOutput:
@@ -115,7 +117,7 @@ class GitAdd(ToolBase):
             args.extend(files)
         else:
             args.append(".")
-        code, out, err = await _run_git(args)
+        code, _out, err = await _run_git(args)
         if code != 0:
             return ToolOutput(text=err or "git error", error=True)
         return ToolOutput(text="Staged.", title="git add")
@@ -185,7 +187,9 @@ class GitPR(ToolBase):
                 return ToolOutput(text=f"gh CLI error: {err}", error=True)
             return ToolOutput(text=out.strip(), title=f"PR: {title}")
         except FileNotFoundError:
-            return ToolOutput(text="gh CLI not found. Install GitHub CLI: https://cli.github.com/", error=True)
+            return ToolOutput(
+                text="gh CLI not found. Install GitHub CLI: https://cli.github.com/", error=True
+            )
 
 
 for cls in [GitStatus, GitDiff, GitLog, GitCommit, GitAdd, GitPush, GitBranch, GitPR]:

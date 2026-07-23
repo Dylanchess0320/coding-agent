@@ -77,9 +77,11 @@ PROVIDER_DEFAULTS = {
 
 # ── Configuration data class ──────────────────────────────────────────
 
+
 @dataclass
 class LLMConfig:
     """Configuration for an LLM provider."""
+
     api_key: str = ""
     base_url: str = ""
     model: str = ""
@@ -90,6 +92,7 @@ class LLMConfig:
 
 
 # ── Detection logic ───────────────────────────────────────────────────
+
 
 def detect_provider() -> str | None:
     """Auto-detect which provider to use based on environment variables.
@@ -128,7 +131,9 @@ def resolve_provider_config(provider: str | None = None) -> dict:
 
     api_key = ""
     if defaults["env_key"]:
-        api_key = os.environ.get(defaults["env_key"], "") or os.environ.get("CODING_AGENT_API_KEY", "")
+        api_key = os.environ.get(defaults["env_key"], "") or os.environ.get(
+            "CODING_AGENT_API_KEY", ""
+        )
 
     base_url = os.environ.get(defaults["env_base"], defaults["default_base"])
     model_name = os.environ.get(defaults["env_model"], defaults["default_model"])
@@ -139,11 +144,13 @@ def resolve_provider_config(provider: str | None = None) -> dict:
         if raw_model == "auto" or raw_model.lower() == "auto":
             try:
                 from model_resolver import resolve_model as resolve_deepseek_model
+
                 model_name = resolve_deepseek_model(
                     api_key=api_key or os.environ.get("CODING_AGENT_API_KEY", ""),
                     base_url=base_url,
                     preferred="auto",
-                    thinking=os.environ.get("CODING_AGENT_THINKING", "").lower() in ("1", "true", "yes"),
+                    thinking=os.environ.get("CODING_AGENT_THINKING", "").lower()
+                    in ("1", "true", "yes"),
                 )
             except Exception:
                 model_name = defaults["default_model"]
@@ -177,12 +184,12 @@ def build_llm_config(provider: str | None = None) -> LLMConfig:
 def detect_api_format(provider: str) -> str:
     """Determine the API format for a provider."""
     formats = {
-        "openai": "openai",      # OpenAI-compatible chat completions
-        "anthropic": "anthropic", # Anthropic Messages API
-        "google": "google",      # Google Generative AI
-        "ollama": "openai",      # Ollama uses OpenAI-compatible
-        "deepseek": "openai",    # DeepSeek uses OpenAI-compatible
-        "zai": "openai",         # Z.ai GLM uses OpenAI-compatible endpoint
+        "openai": "openai",  # OpenAI-compatible chat completions
+        "anthropic": "anthropic",  # Anthropic Messages API
+        "google": "google",  # Google Generative AI
+        "ollama": "openai",  # Ollama uses OpenAI-compatible
+        "deepseek": "openai",  # DeepSeek uses OpenAI-compatible
+        "zai": "openai",  # Z.ai GLM uses OpenAI-compatible endpoint
         "openrouter": "openai",  # OpenRouter uses OpenAI-compatible
     }
     return formats.get(provider, "openai")

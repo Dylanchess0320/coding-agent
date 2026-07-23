@@ -12,11 +12,11 @@ Hooks can:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from .types import HookContext
-
 
 # ── Hook type aliases ─────────────────────────────────────────────────
 
@@ -30,6 +30,7 @@ OnEventHook = Callable[[Any], None]  # Generic event listener
 @dataclass
 class Hooks:
     """Collection of all hooks. Each is a list so multiple hooks can be registered."""
+
     before_tool: list[BeforeToolHook] = field(default_factory=list)
     after_tool: list[AfterToolHook] = field(default_factory=list)
     before_model: list[BeforeModelHook] = field(default_factory=list)
@@ -53,6 +54,7 @@ class Hooks:
 
 
 # ── Plugin base class ─────────────────────────────────────────────────
+
 
 class AgentPlugin:
     """Base class for agent plugins. Override the methods you need."""

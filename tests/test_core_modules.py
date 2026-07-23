@@ -1,10 +1,8 @@
-import pytest
-
-
 class TestProviders:
 
     def test_resolve_provider_config(self, monkeypatch):
         from core.providers import resolve_provider_config
+
         cfg = resolve_provider_config()
         assert isinstance(cfg, dict)
         assert "provider" in cfg
@@ -12,22 +10,24 @@ class TestProviders:
 
     def test_detect_api_format(self):
         from core.providers import detect_api_format
+
         assert detect_api_format("openai") == "openai"
         assert detect_api_format("deepseek") == "openai"
         assert detect_api_format("anthropic") == "anthropic"
-
 
 
 class TestMessageBuilder:
 
     def test_build_system(self):
         from core.message_builder import MessageBuilder
+
         builder = MessageBuilder()
         result = builder.build_system("test-provider", "test-model", "test-tools")
         assert isinstance(result, str)
 
     def test_build_truncation_notice(self):
         from core.message_builder import MessageBuilder
+
         builder = MessageBuilder()
         msg = builder.build_truncation_notice()
         assert msg is not None
@@ -39,17 +39,20 @@ class TestContextManager:
 
     def test_estimate_tokens(self):
         from core.context_manager import estimate_tokens
+
         assert estimate_tokens("") == 0
         assert estimate_tokens("hello world") > 0
 
     def test_truncate_messages_under_limit(self):
         from core.context_manager import truncate_messages
+
         msgs = [{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}]
         r = truncate_messages(msgs, max_messages=40)
         assert len(r) == 2
 
     def test_truncate_preserves_tool_pairs(self):
         from core.context_manager import truncate_messages
+
         msgs = [
             {"role": "system", "content": "sys"},
             {"role": "user", "content": "do"},
@@ -64,6 +67,7 @@ class TestHooks:
 
     def test_register_before_tool(self):
         from core.hooks import get_hooks, reset_hooks
+
         reset_hooks()
         hooks = get_hooks()
         results = []
@@ -73,6 +77,7 @@ class TestHooks:
 
     def test_reset_hooks(self):
         from core.hooks import get_hooks, reset_hooks
+
         reset_hooks()
         hooks = get_hooks()
         hooks.register_before_tool(lambda n, a, c: None)
@@ -86,6 +91,7 @@ class TestCheckpoint:
 
     def test_record_and_list(self, tmp_path, monkeypatch):
         from core.checkpoint import CheckpointManager
+
         monkeypatch.chdir(tmp_path)
         cm = CheckpointManager()
         cp = cm.record_change("/tmp/t.py", "old content", "new content")
@@ -96,6 +102,7 @@ class TestCheckpoint:
 
     def test_clear(self, tmp_path, monkeypatch):
         from core.checkpoint import CheckpointManager
+
         monkeypatch.chdir(tmp_path)
         cm = CheckpointManager()
         cm.record_change("/tmp/a.py", "a", "b")
@@ -107,7 +114,9 @@ class TestLLMClient:
 
     def test_create_openai(self):
         from llm import LLMClient, LLMConfig
-        cfg = LLMConfig(api_key="sk-test", base_url="https://test.com/v1",
-                        model="gpt-4o", provider="openai")
+
+        cfg = LLMConfig(
+            api_key="sk-test", base_url="https://test.com/v1", model="gpt-4o", provider="openai"
+        )
         client = LLMClient.create(cfg)
         assert client is not None

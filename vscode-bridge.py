@@ -9,10 +9,10 @@ responses, and tool execution with VSCode-provided context.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import sys
-import json
-import asyncio
 import traceback
 from pathlib import Path
 
@@ -20,8 +20,8 @@ from pathlib import Path
 AGENT_DIR = Path(__file__).parent
 sys.path.insert(0, str(AGENT_DIR))
 
-from config import get_config
 from agent import CodingAgent
+from config import get_config
 from memory.store import get_memory
 from model_resolver import resolve_model
 
@@ -109,7 +109,7 @@ async def handle_request(request: dict) -> dict:
                     "model": cfg.get("model", "auto"),
                     "cwd": os.getcwd(),
                     "memory_summary": memory.summarize() if memory else "",
-                }
+                },
             }
 
         elif method == "reset":

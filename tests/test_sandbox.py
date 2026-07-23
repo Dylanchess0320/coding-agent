@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-from sandbox import is_safe, execute, CommandResult
+from sandbox import CommandResult, execute, is_safe
 
 
 class TestSandboxSafety:
@@ -17,10 +16,10 @@ class TestSandboxSafety:
 
     def test_safe_command_with_paths(self):
         """Test safe commands with project directory paths."""
-        safe, reason = is_safe("python test.py")
+        safe, _reason = is_safe("python test.py")
         assert safe is True
 
-        safe, reason = is_safe("dir .")
+        safe, _reason = is_safe("dir .")
         assert safe is True
 
     def test_rm_rf_root_blocked(self):
@@ -84,7 +83,7 @@ class TestSandboxSafety:
 
     def test_empty_command_safety(self):
         """Test empty/whitespace commands."""
-        safe, reason = is_safe("")
+        safe, _reason = is_safe("")
         assert safe is True
 
 

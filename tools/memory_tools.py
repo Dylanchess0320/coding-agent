@@ -5,9 +5,10 @@ Tightly integrated with the memory graph for persistent cross-session knowledge.
 
 from __future__ import annotations
 
+from memory.store import get_memory
+
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
-from memory.store import get_memory
 
 
 class MemoryRemember(ToolBase):
@@ -16,7 +17,11 @@ class MemoryRemember(ToolBase):
     aliases = ["Remember", "Memorize", "SaveMemory"]
     parameters = {
         "content": {"type": "string", "description": "The fact or knowledge to remember"},
-        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags for categorization"},
+        "tags": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Tags for categorization",
+        },
         "alias": {"type": "string", "description": "Short alias/key for lookup"},
         "source": {"type": "string", "description": "Where this knowledge came from"},
     }
@@ -72,7 +77,9 @@ class MemoryForget(ToolBase):
                     target = mid
                     break
         if not target:
-            return ToolOutput(text=f"No memory found with ID starting with '{memory_id}'", error=True)
+            return ToolOutput(
+                text=f"No memory found with ID starting with '{memory_id}'", error=True
+            )
 
         ok = mem.delete(target)
         if ok:

@@ -80,9 +80,7 @@ class TerminalUI:
     def __init__(self) -> None:
         self.rich = _RICH_AVAILABLE
         self._console = (
-            Console(theme=JCODE_THEME, highlight=True, soft_wrap=True)
-            if self.rich
-            else None
+            Console(theme=JCODE_THEME, highlight=True, soft_wrap=True) if self.rich else None
         )
         self._stream_buffer = ""
         self._live: Live | None = None
@@ -101,7 +99,9 @@ class TerminalUI:
     # ── Helpers ────────────────────────────────────────────────────
 
     def _dim(self, text: str) -> str:
-        return f"[{BRAND['muted']}]{text}[/]" if self.rich else f"{ANSI['dim']}{text}{ANSI['reset']}"
+        return (
+            f"[{BRAND['muted']}]{text}[/]" if self.rich else f"{ANSI['dim']}{text}{ANSI['reset']}"
+        )
 
     def _primary(self, text: str) -> str:
         return (
@@ -170,7 +170,9 @@ class TerminalUI:
             self._console.print(f"  {self._dim(tip)}")
             self._console.print()
         else:
-            print(f"\n  {ANSI['bold']}{ANSI['cyan']}LuckyD Code{ANSI['reset']} {ANSI['dim']}v2.1.0{ANSI['reset']}")
+            print(
+                f"\n  {ANSI['bold']}{ANSI['cyan']}LuckyD Code{ANSI['reset']} {ANSI['dim']}v2.1.0{ANSI['reset']}"
+            )
             if header:
                 print(f"  {ANSI['dim']}{header}{ANSI['reset']}")
             print(f"  {ANSI['dim']}{self._sep()}{ANSI['reset']}")
@@ -209,8 +211,6 @@ class TerminalUI:
     def streamed_chars(self) -> int:
         """How many characters were actually streamed (not counting thinking tokens)."""
         return len(self._stream_buffer)
-
-
 
     def start_streaming(self) -> None:
         """Begin streaming a response (incremental plain text)."""
@@ -409,17 +409,14 @@ class TerminalUI:
                 f"{ANSI['dim']}{arg_preview}{ANSI['reset']}"
             )
 
-    def tool_call_result(
-        self, tool_name: str, elapsed: float, ok: bool, preview: str
-    ) -> None:
+    def tool_call_result(self, tool_name: str, elapsed: float, ok: bool, preview: str) -> None:
         status = "ok" if ok else "fail"
         color = BRAND["success"] if ok else BRAND["error"]
         snippet = (preview or "").replace("\n", " ").strip()[:48]
         if self.rich:
             self._console.print(
                 f"    [{color}]{status}[/] "
-                f"{self._dim(f'{elapsed:.1f}s')}"
-                + (f"  {self._dim(snippet)}" if snippet else "")
+                f"{self._dim(f'{elapsed:.1f}s')}" + (f"  {self._dim(snippet)}" if snippet else "")
             )
         else:
             c = ANSI["green"] if ok else ANSI["red"]
@@ -490,9 +487,7 @@ class TerminalUI:
 
     def show_tools(self, tools: list[str]) -> None:
         if self.rich:
-            self._console.print(
-                f"\n  {self._primary('Tools')} {self._dim(f'({len(tools)})')}"
-            )
+            self._console.print(f"\n  {self._primary('Tools')} {self._dim(f'({len(tools)})')}")
             # Compact multi-column-ish list
             for name in tools:
                 self._console.print(f"    {self._dim('•')} {name}")

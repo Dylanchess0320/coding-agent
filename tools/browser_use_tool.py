@@ -15,10 +15,10 @@ from pathlib import Path
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
 
-
 # ── lazy import ─────────────────────────────────────────────────────────────
 
 _browser_use_available = None
+
 
 def _check_browser_use() -> bool:
     """Check if browser-use is importable (needs Python 3.11+)."""
@@ -27,6 +27,7 @@ def _check_browser_use() -> bool:
         return _browser_use_available
     try:
         import browser_use  # noqa: F401
+
         _browser_use_available = True
     except ImportError:
         _browser_use_available = False
@@ -34,6 +35,7 @@ def _check_browser_use() -> bool:
 
 
 # ── helper ──────────────────────────────────────────────────────────────────
+
 
 def _get_api_key() -> str:
     """Try to read the coding-agent's own API key for reuse."""
@@ -51,6 +53,7 @@ def _get_api_key() -> str:
 
 
 # ── Tool class ──────────────────────────────────────────────────────────────
+
 
 class BrowserUseTool(ToolBase):
     name = "BrowserUse"
@@ -143,20 +146,19 @@ class BrowserUseTool(ToolBase):
                 else:
                     final_text = str(fr)
 
-            if not final_text:
-                if hasattr(result, "model_dump"):
-                    dump = result.model_dump
-                    if callable(dump):
-                        dump = dump()
-                    if isinstance(dump, dict):
-                        history = dump.get("history", [])
-                        steps = []
-                        for i, step in enumerate(history):
-                            if isinstance(step, dict):
-                                result_text = step.get("result", "")
-                                if result_text:
-                                    steps.append(f"Step {i+1}: {result_text}")
-                        final_text = "\n".join(steps[-10:]) if steps else str(dump)[:4000]
+            if not final_text and hasattr(result, "model_dump"):
+                dump = result.model_dump
+                if callable(dump):
+                    dump = dump()
+                if isinstance(dump, dict):
+                    history = dump.get("history", [])
+                    steps = []
+                    for i, step in enumerate(history):
+                        if isinstance(step, dict):
+                            result_text = step.get("result", "")
+                            if result_text:
+                                steps.append(f"Step {i+1}: {result_text}")
+                    final_text = "\n".join(steps[-10:]) if steps else str(dump)[:4000]
 
             if not final_text:
                 final_text = str(result)[:4000]
@@ -190,6 +192,7 @@ class BrowserUseTool(ToolBase):
 
 class BrowserUseCloseTool(ToolBase):
     """Close the shared browser-use browser (cleans up resources)."""
+
     name = "BrowserUseClose"
     description = "Close the browser-use browser session and free resources."
     aliases = ["CloseWebAgent"]

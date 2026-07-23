@@ -41,6 +41,7 @@ class MessageBuilder:
         try:
             from config import PROJECT_DIR
             from project import ProjectDetector
+
             detector = ProjectDetector()
             self._project_info = detector.detect(PROJECT_DIR)
         except Exception:
@@ -59,7 +60,11 @@ class MessageBuilder:
         base = DEFAULT_SYSTEM_PROMPT.format(cwd=cwd) + f"\nAvailable tools:\n{tools_description}"
 
         # Append project intelligence
-        if self._project_info and hasattr(self._project_info, 'is_empty') and not self._project_info.is_empty():
+        if (
+            self._project_info
+            and hasattr(self._project_info, "is_empty")
+            and not self._project_info.is_empty()
+        ):
             base += "\n\n## Project Context\n" + self._project_info.to_prompt()
 
         base += f"\n\n## Model\nProvider: {provider_name} | Model: {model_name}"

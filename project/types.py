@@ -1,4 +1,5 @@
 """Project data types."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -7,6 +8,7 @@ from dataclasses import dataclass, field
 @dataclass
 class ProjectInfo:
     """Detected project metadata."""
+
     name: str = "unknown"
     language: str = ""
     framework: str = ""

@@ -41,6 +41,7 @@ MCP_CONFIG_PATHS: list[Path] = [
 @dataclass
 class MCPServerConfig:
     """Configuration for a single MCP server."""
+
     name: str
     command: str
     args: list[str] = field(default_factory=list)
@@ -52,6 +53,7 @@ class MCPServerConfig:
 @dataclass
 class MCPToolSchema:
     """Schema for a single tool exposed by an MCP server."""
+
     name: str
     description: str = ""
     input_schema: dict = field(default_factory=lambda: {"type": "object", "properties": {}})
@@ -149,9 +151,12 @@ class MCPStdioTransport:
             env[k] = str(v)
 
         self._process = await asyncio.create_subprocess_exec(
-            cmd, *args, stdin=asyncio.subprocess.PIPE,
+            cmd,
+            *args,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE, env=env,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
 
         assert self._process.stdout is not None
@@ -164,11 +169,14 @@ class MCPStdioTransport:
         self._reader_task = asyncio.ensure_future(self._reader_loop())
 
         # MCP handshake
-        self._server_info = await self._request("initialize", {
-            "protocolVersion": "2024-11-05",
-            "clientInfo": {"name": "luckyd-code", "version": "2.1.0"},
-            "capabilities": {},
-        })
+        self._server_info = await self._request(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "clientInfo": {"name": "luckyd-code", "version": "2.1.0"},
+                "capabilities": {},
+            },
+        )
         await self._send_notification("notifications/initialized")
 
     async def _log_stderr(self) -> None:
@@ -259,12 +267,15 @@ class MCPStdioTransport:
             return []
         schemas = []
         for t in result.get("tools", []):
-            schemas.append(MCPToolSchema(
-                name=t.get("name", "unknown"),
-                description=t.get("description", ""),
-                input_schema=t.get("inputSchema", t.get("parameters",
-                    {"type": "object", "properties": {}})),
-            ))
+            schemas.append(
+                MCPToolSchema(
+                    name=t.get("name", "unknown"),
+                    description=t.get("description", ""),
+                    input_schema=t.get(
+                        "inputSchema", t.get("parameters", {"type": "object", "properties": {}})
+                    ),
+                )
+            )
         return schemas
 
     async def call_tool(self, name: str, arguments: dict | None = None) -> Any:
@@ -351,9 +362,7 @@ class MCPManager:
         lines = []
         for name, cfg in self._servers.items():
             status = self._status.get(name, "unknown")
-            lines.append(
-                f"  {name}: {status}  ({cfg.command} {' '.join(cfg.args)})"
-            )
+            lines.append(f"  {name}: {status}  ({cfg.command} {' '.join(cfg.args)})")
         if not self._servers:
             lines.append("  (no MCP servers configured)")
         return "\n".join(lines)
@@ -368,4 +377,3 @@ class MCPManager:
                 await client.close()
         self._clients.clear()
         self._status.clear()
-

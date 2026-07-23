@@ -1,5 +1,6 @@
 """Project Intelligence Engine."""
-from .types import ProjectInfo
-from .detector import ProjectDetector
 
-__all__ = ["ProjectInfo", "ProjectDetector"]
+from .detector import ProjectDetector
+from .types import ProjectInfo
+
+__all__ = ["ProjectDetector", "ProjectInfo"]

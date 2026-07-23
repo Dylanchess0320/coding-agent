@@ -3,12 +3,10 @@ Sandboxed command execution for Windows.
 Guards against destructive operations — the heart of principle #3.
 """
 
-import os
 import re
 import subprocess
-import signal
-import shlex
 from typing import NamedTuple
+
 from config import COMMAND_TIMEOUT_SEC, MAX_OUTPUT_CHARS, PROJECT_DIR
 
 # ── Safety: Blocklist ──────────────────────────────────────────────────
@@ -90,7 +88,7 @@ def is_safe(command: str, cwd: str | None = None) -> tuple[bool, str]:
         r"$HOME",
         r"%SystemRoot%",
         r"%ProgramFiles%",
-        r"%AppData%"
+        r"%AppData%",
     ]
 
     # Only flag path escapes if they're in write/destructive context
@@ -119,6 +117,7 @@ def execute(command: str, cwd: str | None = None, timeout: int | None = None) ->
         return CommandResult(-1, "", reason, True, 0)
 
     import time
+
     start = time.time()
 
     try:
@@ -138,9 +137,15 @@ def execute(command: str, cwd: str | None = None, timeout: int | None = None) ->
 
         # Truncate
         if len(stdout) > MAX_OUTPUT_CHARS:
-            stdout = stdout[:MAX_OUTPUT_CHARS] + f"\n... [truncated {len(stdout) - MAX_OUTPUT_CHARS} chars]"
+            stdout = (
+                stdout[:MAX_OUTPUT_CHARS]
+                + f"\n... [truncated {len(stdout) - MAX_OUTPUT_CHARS} chars]"
+            )
         if len(stderr) > MAX_OUTPUT_CHARS:
-            stderr = stderr[:MAX_OUTPUT_CHARS] + f"\n... [truncated {len(stderr) - MAX_OUTPUT_CHARS} chars]"
+            stderr = (
+                stderr[:MAX_OUTPUT_CHARS]
+                + f"\n... [truncated {len(stderr) - MAX_OUTPUT_CHARS} chars]"
+            )
 
         return CommandResult(proc.returncode, stdout, stderr, False, elapsed)
 

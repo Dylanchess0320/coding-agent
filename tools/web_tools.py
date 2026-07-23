@@ -5,12 +5,10 @@ HTTP request tool, web fetch, and web search integration.
 from __future__ import annotations
 
 import asyncio
-
 import json
-import urllib.request
 import urllib.error
 import urllib.parse
-from pathlib import Path
+import urllib.request
 
 from .base import ToolBase, ToolOutput
 from .registry import register_tool
@@ -23,10 +21,16 @@ class HttpTool(ToolBase):
     parameters = {
         "method": {"type": "string", "description": "HTTP method (default: GET)"},
         "url": {"type": "string", "description": "Full URL including scheme (https://...)"},
-        "headers": {"type": "object", "description": "Additional request headers as key-value pairs"},
+        "headers": {
+            "type": "object",
+            "description": "Additional request headers as key-value pairs",
+        },
         "json_body": {"type": "object", "description": "Request body as a JSON object"},
         "bearer_token": {"type": "string", "description": "Bearer token for Authorization header"},
-        "timeout_sec": {"type": "integer", "description": "Request timeout in seconds (default: 30)"},
+        "timeout_sec": {
+            "type": "integer",
+            "description": "Request timeout in seconds (default: 30)",
+        },
     }
 
     async def execute(
@@ -49,7 +53,7 @@ class HttpTool(ToolBase):
         except asyncio.TimeoutError:
             return ToolOutput(text="HTTP request timed out after " + str(timeout) + "s", error=True)
         except Exception as e:
-            return ToolOutput(text="HTTP error: {0}".format(e), error=True)
+            return ToolOutput(text=f"HTTP error: {e}", error=True)
 
     def _do_request(
         self,
@@ -104,7 +108,8 @@ class HttpTool(ToolBase):
                 error=True,
             )
         except Exception as e:
-            return ToolOutput(text="HTTP error: {0}".format(e), error=True)
+            return ToolOutput(text=f"HTTP error: {e}", error=True)
+
 
 class WebFetchTool(ToolBase):
     name = "WebFetch"
@@ -123,15 +128,12 @@ class WebFetchTool(ToolBase):
         except asyncio.TimeoutError:
             return ToolOutput(text="Fetch timed out after 30s", error=True)
         except Exception as e:
-            return ToolOutput(text="Fetch error: {0}".format(e), error=True)
+            return ToolOutput(text=f"Fetch error: {e}", error=True)
 
     @staticmethod
     def _do_fetch(url: str) -> ToolOutput:
         try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "Mozilla/5.0 CodingAgent/2.0"}
-            )
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 CodingAgent/2.0"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 html = resp.read().decode("utf-8", errors="replace")
 
@@ -160,9 +162,11 @@ class WebFetchTool(ToolBase):
                 metadata={"url": url, "chars": len(text)},
             )
         except urllib.error.HTTPError as e:
-            return ToolOutput(text="HTTP {0}: {1}".format(e.code, e.reason), error=True)
+            return ToolOutput(text=f"HTTP {e.code}: {e.reason}", error=True)
         except Exception as e:
-            return ToolOutput(text="Fetch error: {0}".format(e), error=True)
+            return ToolOutput(text=f"Fetch error: {e}", error=True)
+
+
 class WebSearchTool(ToolBase):
     name = "WebSearch"
     description = "Search the web and get results. Uses DuckDuckGo's free API."
@@ -205,7 +209,11 @@ class WebSearchTool(ToolBase):
 
         results = await asyncio.to_thread(_do_search)
 
-        output = f"Results for: {query}\n\n" + "\n\n".join(results) if results else f"No results for: {query}"
+        output = (
+            f"Results for: {query}\n\n" + "\n\n".join(results)
+            if results
+            else f"No results for: {query}"
+        )
 
         return ToolOutput(
             text=output,
@@ -218,14 +226,16 @@ class WebSearchTool(ToolBase):
         import asyncio
 
         def _do_search():
-            import urllib.parse
-            import re
             import html as html_mod
+            import re
+            import urllib.parse
 
             url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                },
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 html_text = resp.read().decode("utf-8", errors="replace")
@@ -257,7 +267,11 @@ class WebSearchTool(ToolBase):
 
         results = await asyncio.to_thread(_do_search)
 
-        output = f"Results for: {query}\n\n" + "\n\n".join(results) if results else f"No results for: {query}"
+        output = (
+            f"Results for: {query}\n\n" + "\n\n".join(results)
+            if results
+            else f"No results for: {query}"
+        )
 
         return ToolOutput(
             text=output,

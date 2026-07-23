@@ -5,11 +5,9 @@ Borrows patterns from Cline's session-compaction.ts with multiple strategies.
 
 from __future__ import annotations
 
-import json
-from typing import Callable
+from collections.abc import Callable
 
 from .types import CompactionStrategy
-
 
 # ── Token estimation ──────────────────────────────────────────────────
 
@@ -62,9 +60,8 @@ def truncate_messages(
             if role == "tool":
                 if len(content) > max_tool_output_chars:
                     msg["content"] = content[:max_tool_output_chars] + "\n... [truncated]"
-            elif role == "assistant":
-                if len(content) > max_assistant_chars:
-                    msg["content"] = content[:max_assistant_chars] + "\n... [truncated]"
+            elif role == "assistant" and len(content) > max_assistant_chars:
+                msg["content"] = content[:max_assistant_chars] + "\n... [truncated]"
         return messages
 
     # Keep only leading system messages (the actual prompt).
@@ -85,9 +82,12 @@ def truncate_messages(
         if prev.get("role") == "assistant" and prev.get("tool_calls"):
             start_idx -= 1
 
-    return messages[:sys_end] + [
-        {"role": "system", "content": "[Context truncated — keeping most recent messages only]"}
-    ] + messages[start_idx:]
+    return [
+        *messages[:sys_end],
+        {"role": "system", "content": "[Context truncated — keeping most recent messages only]"},
+        *messages[start_idx:],
+    ]
+
 
 async def summarize_messages(
     messages: list[dict],
@@ -108,7 +108,11 @@ async def summarize_messages(
     while split_idx > 0 and messages[split_idx].get("role") == "tool":
         split_idx -= 1
         keep += 1
-    if split_idx > 0 and messages[split_idx - 1].get("role") == "assistant" and messages[split_idx - 1].get("tool_calls"):
+    if (
+        split_idx > 0
+        and messages[split_idx - 1].get("role") == "assistant"
+        and messages[split_idx - 1].get("tool_calls")
+    ):
         split_idx -= 1
         keep += 1
 
@@ -140,7 +144,7 @@ async def summarize_messages(
                 "role": "system",
                 "content": f"[Context summary of previous turns]\n{summary_text[:2000]}",
             }
-            return messages[:system_count] + [summary_msg] + to_keep
+            return [*messages[:system_count], summary_msg, *to_keep]
         except Exception:
             pass
 
