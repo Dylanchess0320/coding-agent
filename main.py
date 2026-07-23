@@ -10,22 +10,27 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
 import os
 import sys
-import asyncio
-import json
 from pathlib import Path
 
 # Ensure the coding-agent dir is on the path
 AGENT_DIR = Path(__file__).parent
 sys.path.insert(0, str(AGENT_DIR))
 
-from config import get_config, PROJECT_DIR  # noqa: E402
-from agent import CodingAgent  # noqa: E402
-from tools.registry import registry  # noqa: E402
-from ui import ui  # noqa: E402
-from model_resolver import resolve_model, invalidate_cache  # noqa: E402
-
+from agent import CodingAgent
+from config import PROJECT_DIR, get_config
+from core.approval_hook import ApprovalHook
+from core.hooks import get_hooks, register_plugin
+from core.mcp_client import MCPManager
+from core.session_store import get_session_store
+from model_resolver import invalidate_cache, resolve_model
+from tools.mcp_tools import register_mcp_tools
+from tools.registry import registry
+from ui import ui
 
 _PROVIDER_DISPLAY_NAMES = {
     "deepseek": "DeepSeek",
@@ -33,6 +38,8 @@ _PROVIDER_DISPLAY_NAMES = {
     "anthropic": "Anthropic",
     "google": "Google",
     "ollama": "Ollama",
+    "zai": "Z.ai",
+    "openrouter": "OpenRouter",
 }
 
 
@@ -64,7 +71,7 @@ def _prompt_and_save_api_key(env_var: str, provider_name: str) -> str:
             new_lines.append(line)
 
     if not replaced:
-        if new_lines and not new_lines[-1].strip() == "":
+        if new_lines and new_lines[-1].strip() != "":
             new_lines.append("\n")
         new_lines.append(f"# {provider_name}\n")
         new_lines.append(f"{env_var}={key}\n")
@@ -89,6 +96,8 @@ def _resolve_provider(provider_hint: str | None, model_name: str) -> dict:
         "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"),
         "google": ("GOOGLE_API_KEY", "GOOGLE_BASE_URL", "GOOGLE_MODEL"),
         "ollama": (None, "OLLAMA_HOST", "OLLAMA_MODEL"),
+        "zai": ("ZAI_API_KEY", "ZAI_BASE_URL", "ZAI_MODEL"),
+        "openrouter": ("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL"),
     }
 
     if provider_hint and provider_hint in provider_map:
@@ -166,6 +175,27 @@ def _switch_model(agent, provider: str | None = None, model_name: str = ""):
 
 # ── Slash commands ────────────────────────────────────────────────────
 
+# ── Approval callback ───────────────────────────────────────────────
+
+
+def _console_approval(request) -> type(None):
+    """Prompt user for tool approval in REPL. Returns None to proceed; returning a dict blocks the tool."""
+    from core.types import ToolPermissionLevel
+    preview = request.tool_args.get("command", request.tool_name)[:120]
+    print(f"\n  [APPROVAL] {request.tool_name}: {preview}")
+    print("  Approve? [y]es/[n]o/[a]lways-allow: ", end="")
+    ans = sys.stdin.readline().strip().lower() or "n"
+    if ans == "a":
+        for p in get_hooks().before_tool:
+            if hasattr(p, "set_permission"):
+                p.set_permission(request.tool_name, ToolPermissionLevel.ALWAYS_ALLOW)
+                break
+        return None
+    if ans in ("y", "yes"):
+        return None
+    return {"role": "tool", "tool_call_id": request.call_id, "content": "Tool execution denied by user."}
+
+
 async def handle_command(agent: CodingAgent, cmd: str) -> bool:
     """
     Handle a slash command. Returns True if the REPL should exit,
@@ -212,14 +242,13 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
             # Parse "provider model_id" or just "model_id"
             provider = None
             desired = raw
-            for p in ("openai", "anthropic", "google", "ollama", "deepseek"):
+            for p in ("openai", "anthropic", "google", "ollama", "deepseek", "zai", "openrouter"):
                 if raw.lower().startswith(p + " "):
                     provider = p
                     desired = raw[len(p) + 1:].strip()
                     break
             _switch_model(agent, provider=provider, model_name=desired)
         else:
-            cfg = get_config()
             ui.info(f"Model: {agent.model}")
             ui.show_models([
                 ("OpenAI", ["gpt-4o", "gpt-4o-mini", "o1-preview", "o1-mini"]),
@@ -227,6 +256,8 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
                 ("Google", ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]),
                 ("Ollama", ["codellama", "llama3.1", "mistral", "phi3"]),
                 ("DeepSeek", ["deepseek-chat", "deepseek-reasoner", "deepseek-coder"]),
+                ("Z.ai", ["glm-4.6", "glm-4.5", "glm-4.5-air"]),
+                ("OpenRouter", ["deepseek/deepseek-chat-v3.1", "anthropic/claude-sonnet-4", "google/gemini-2.0-flash-001"]),
             ])
 
     elif cmd == "refresh":
@@ -238,6 +269,55 @@ async def handle_command(agent: CodingAgent, cmd: str) -> bool:
         save_path = PROJECT_DIR / f"conversation_{agent.conversation_id}.json"
         save_path.write_text(json.dumps(agent.messages, indent=2, default=str))
         ui.success(f"Saved to: {save_path}")
+
+    elif cmd == "cost":
+        ui.markdown(agent.cost_tracker.summary())
+
+    elif cmd == "undo":
+        from core.checkpoint import get_checkpoint_manager
+        cm = get_checkpoint_manager()
+        diff = cm.undo_last()
+        if diff:
+            adds = diff.additions
+            dels = diff.deletions
+            ui.success(f"Undid changes to {diff.file_path} ({adds}+ / {dels}-)")
+        else:
+            ui.warn("Nothing to undo")
+
+    elif cmd == "sessions":
+        sessions = get_session_store().list(limit=10)
+        if not sessions:
+            ui.info("No saved sessions")
+        else:
+            parts = []
+            for s in sessions:
+                sid = s.get("conversation_id", "?")
+                ts = (s.get("updated_at") or "")[-19:] if s.get("updated_at") else "---"
+                prev = (s.get("preview") or "")[:80]
+                mod = s.get("model", "?")
+                parts.append(f"  {sid}  {ts}  {mod}  | {prev}")
+            ui.markdown("**Recent Sessions:**\n" + "\n".join(parts))
+
+    elif cmd.startswith("resume"):
+        parts = cmd.split(maxsplit=1)
+        sid = parts[1] if len(parts) > 1 else "latest"
+        sess = get_session_store().latest() if sid == "latest" else get_session_store().load(sid)
+        if sess:
+            agent.restore_session(sess)
+            prev = (sess.get("preview") or "")[:80]
+            ui.success(f"Resumed: {prev}")
+        else:
+            ui.error(f"Session not found: {sid}")
+
+    elif cmd == "mcp":
+        mgr = getattr(agent, "_mcp_manager", None)
+        if mgr and mgr.is_connected:
+            ui.markdown("**MCP Status**\n" + mgr.status_report())
+        else:
+            ui.warn("MCP not configured or no servers connected")
+
+    elif cmd == "version":
+        ui.info("LuckyD Code 2.1.0")
 
     elif cmd == "":
         pass  # Empty command
@@ -283,8 +363,6 @@ async def run_one_shot_json(agent: CodingAgent, message: str):
 
 async def run_repl(agent: CodingAgent):
     """Interactive REPL with streaming and session info."""
-    cfg = get_config()
-    raw_model = cfg.get("raw_model", agent.model)
 
     # Show enhanced banner with project info
     project_name = agent._project_info.name if agent._project_info and not agent._project_info.is_empty() else ""
@@ -338,6 +416,8 @@ def main():
     model = cfg["model"]
     temperature = cfg["temperature"]
     one_shot = ""
+    auto_approve = False
+    resume_session_id = ""
 
     json_mode = False
     i = 0
@@ -350,39 +430,63 @@ def main():
                 thinking=cfg.get("thinking", False),
             )
             i += 2
+        elif args[i] == "--provider" and i + 1 < len(args):
+            os.environ["CODING_AGENT_PROVIDER"] = args[i + 1]
+            cfg = get_config()
+            i += 2
         elif args[i] == "--thinking":
             os.environ["CODING_AGENT_THINKING"] = "true"
-            # Re-resolve model with thinking
-            cfg = get_config()  # re-read config with thinking enabled
+            cfg = get_config()
             model = cfg["model"]
             i += 1
         elif args[i] == "--temp" and i + 1 < len(args):
             temperature = float(args[i + 1])
             i += 2
+        elif args[i] in ("-y", "--yes", "--auto-approve"):
+            auto_approve = True
+            os.environ["CODING_AGENT_AUTO_APPROVE"] = "1"
+            i += 1
+        elif args[i] == "--max-turns" and i + 1 < len(args):
+            os.environ["CODING_AGENT_MAX_TURNS"] = args[i + 1]
+            cfg = get_config()
+            i += 2
+        elif args[i] in ("-c", "--continue"):
+            resume_session_id = "latest"
+            i += 1
+        elif args[i] == "--resume" and i + 1 < len(args):
+            resume_session_id = args[i + 1]
+            i += 2
+        elif args[i] in ("-v", "--version"):
+            print("LuckyD Code 2.1.0")
+            sys.exit(0)
         elif args[i] == "--help":
             print("""
-LuckyD Code — AI Coding Agent
+LuckyD Code — AI Coding Agent  v2.1.0
 
 Usage:
   lucky-code                       Interactive REPL
   lucky-code "your query"          One-shot mode
+  lucky-code -c                    Continue last session
+  lucky-code --resume <id>         Resume specific session
 
 Options:
-  --model NAME      Model: auto (default), flash, pro, or specific name
-  --thinking        Use the thinking/reasoning model (pro)
-  --temp FLOAT      Temperature (default: 0.0)
-  --help            Show this help
-
-Defaults:
-  Model 'auto' fetches DeepSeek's latest models on startup
-  and auto-selects the best one. Cache lasts 24 hours.
-  Use /refresh to force a refresh.
+  --model NAME       Model: auto (default), flash, pro, or specific name
+  --provider NAME    Set provider: deepseek, openai, anthropic, google,
+                     ollama, zai, openrouter
+  --thinking         Use the thinking/reasoning model (pro)
+  --temp FLOAT       Temperature (default: 0.0)
+  -y, --yes          Auto-approve all tool calls (non-interactive mode)
+  --max-turns N      Override max agent turns (default: 30)
+  -c, --continue     Resume most recent session
+  --resume <id>      Resume a specific session by ID or prefix
+  --json             Structured JSON-line output (for extensions)
+  -v, --version      Show version
+  --help             Show this help
 
 Environment:
-  DEEPSEEK_API_KEY      Your DeepSeek API key (set in .env)
-  CODING_AGENT_MODEL    Override model (default: auto)
-  CODING_AGENT_THINKING Set to '1'/'true' for reasoning mode
-  CODING_AGENT_MAX_TURNS Max turns (default: 30)
+  <PROVIDER>_API_KEY   Set in .env for your provider
+  CODING_AGENT_PROVIDER Explicit provider override
+  CODING_AGENT_AUTO_APPROVE=1   Bypass all tool approvals
 """)
             sys.exit(0)
         elif args[i] == "--json":
@@ -398,7 +502,7 @@ Environment:
             # One-shot mode -- cannot interact; exit with instructions
             ui.error("DEEPSEEK_API_KEY not set.")
             print(f"  Set it in {PROJECT_DIR / '.env'} or as an environment variable.")
-            print(f"  Get a key: https://platform.deepseek.com/api_keys")
+            print("  Get a key: https://platform.deepseek.com/api_keys")
             sys.exit(1)
         else:
             # REPL mode -- prompt the user interactively
@@ -416,13 +520,60 @@ Environment:
         max_tokens=cfg["max_tokens"],
     )
 
-    if one_shot:
-        if json_mode:
-            asyncio.run(run_one_shot_json(agent, one_shot))
-        else:
-            asyncio.run(run_one_shot(agent, one_shot))
+    # Wire approval hook
+    if auto_approve or not sys.stdin.isatty():
+        hook = ApprovalHook(session_id=agent.conversation_id)
+        hook.auto_approve_all = True
+        register_plugin(hook)
     else:
-        asyncio.run(run_repl(agent))
+        register_plugin(ApprovalHook(
+            approval_callback=_console_approval,
+            session_id=agent.conversation_id,
+        ))
+
+    # Connect MCP servers
+    mcp_manager = MCPManager()
+    try:
+        loop = asyncio.new_event_loop()
+        n_srv = loop.run_until_complete(mcp_manager.connect_all())
+        if n_srv:
+            n_tools = register_mcp_tools(mcp_manager)
+            print(f"  [MCP] {n_srv} server(s), {n_tools} tool(s) registered")
+        loop.close()
+        agent._mcp_manager = mcp_manager
+    except Exception as e:
+        print(f"  [MCP] Connection: {e}")
+        agent._mcp_manager = mcp_manager
+
+    # Session resume
+    if resume_session_id == "latest":
+        sess = get_session_store().latest()
+        if sess:
+            agent.restore_session(sess)
+            print(f"  [Session] Resumed: {(sess.get('preview') or '')[:60]}")
+    elif resume_session_id:
+        sess = get_session_store().load(resume_session_id)
+        if sess:
+            agent.restore_session(sess)
+            print(f"  [Session] Resumed: {(sess.get('preview') or '')[:60]}")
+
+    try:
+        if one_shot:
+            if json_mode:
+                asyncio.run(run_one_shot_json(agent, one_shot))
+            else:
+                asyncio.run(run_one_shot(agent, one_shot))
+        else:
+            asyncio.run(run_repl(agent))
+    finally:
+        with contextlib.suppress(Exception):
+            agent.save_session()
+        try:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(mcp_manager.close_all())
+            loop.close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

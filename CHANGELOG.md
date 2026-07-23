@@ -7,15 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0] - 2026-07-22
 
 ### Added
-- `core/agent_loop.py` — modular CodingAgent using `core/llm_client.py`
-- 30+ new pytest tests covering agent, memory, core modules, and tools
-- `test_agent.py` — live agent tests with mocked LLM client
-- `test_memory.py` — memory store, graph, persistence tests
-- `test_core_modules.py` — message builder, context manager, hooks, checkpoint
-- `test_modular_agent.py` — modular agent init, run loop, error handling
-- `test_tools.py` — file tools, bash tool, registry tests
+- **MCP (Model Context Protocol) support** — connect to any MCP server via
+  `mcp_config.json` (claude-desktop / goose / cline compatible). Discovered
+  tools auto-register in the tool registry as `mcp__<server>__<tool>`.
+- **Z.ai (GLM) provider** — `ZAI_API_KEY` / `glm-4.5` (OpenAI-compatible endpoint).
+- **OpenRouter provider** — `OPENROUTER_API_KEY` with 200+ models.
+- **AGENTS.md / project rules** — auto-loads `AGENTS.md`, `.clinerules`,
+  `.goosehints`, `CLAUDE.md` from the workspace into the system prompt.
+- **Session persistence** — every run is auto-saved to `data/sessions/`.
+  Resume with `--continue`, `--resume <id>`, or `/sessions` + `/resume`.
+- **Tool approval system** — interactive y/n/a prompts in the REPL, `--yes`
+  to auto-approve (non-interactive / CI mode). Permission levels per tool.
+- **Token & cost tracking** — `/cost` command and cost summary in goodbye.
+- **New slash commands** — `/cost`, `/undo`, `/sessions`, `/resume`, `/mcp`,
+  `/version`.
+- **CLI flags** — `--yes/-y`, `--max-turns`, `--continue/-c`, `--resume`,
+  `--provider`, `--version/-v`.
+- `mcp_config.example.json` — example MCP server configuration.
+- `core/session_store.py` — file-backed session persistence (save/load/list).
+- `core/rules_loader.py` — multi-format project rules loader.
+- `core/mcp_client.py` — MCP stdio transport + manager.
+- `tools/mcp_tools.py` — MCP tool adapter + `MCPList` management tool.
+
+### Fixed
+- `switch_provider()` now rebuilds `llm_client` with new credentials (was
+  only updating the router, so runtime provider switching was broken).
+- Streaming now captures token usage (`include_usage`) for cost tracking.
+- `conftest.py` mocks for new providers (zai, openrouter).
 
 ### Changed
+- `MessageBuilder.build_system()` accepts `project_rules` parameter.
+- Version bumped to 2.1.0.
+- `test_tools.py` — file tools, bash tool, registry tests
 - `agent.py` rewritten as backward-compatibility shim re-exporting `core.agent_loop.CodingAgent`
 - `LLMResult` now has `get()` and `to_dict()` for dict-like interface compatibility
 - `MemoryGraph.summarize()` implemented (was missing)

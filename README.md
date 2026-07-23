@@ -2,7 +2,7 @@
 
 > AI-powered coding agent for Windows — work in your terminal or VS Code.
 
-**Version:** 2.0
+**Version:** 2.1.0
 
 ## Quick Start
 
@@ -56,12 +56,49 @@ Configure in `.env` — uncomment **one**:
 | Anthropic | `ANTHROPIC_API_KEY` | claude-sonnet-4 |
 | Google | `GOOGLE_API_KEY` | gemini-2.0-flash |
 | Ollama | *(none)* | codellama |
+| Z.ai (GLM) | `ZAI_API_KEY` | glm-4.5 |
+| OpenRouter | `OPENROUTER_API_KEY` | deepseek/deepseek-chat-v3.1 |
 
 Swap models at runtime inside the REPL:
 ```
 /model openai gpt-4o
 /model anthropic claude-sonnet-4-20250514
+/model zai glm-4.6
 ```
+
+## MCP (Model Context Protocol)
+
+Connect to any MCP server for extensible tooling:
+
+1. Copy `mcp_config.example.json` to `mcp_config.json`
+2. Add your servers (filesystem, github, playwright, etc.)
+3. Tools auto-register as `mcp__<server>__<tool>`
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/project"]
+    }
+  }
+}
+```
+
+## Sessions & Resume
+
+Every run is auto-saved. Resume with:
+```
+lucky-code --continue          # resume most recent
+lucky-code --resume conv_2025  # resume by ID prefix
+/sessions                      # list in REPL
+/resume conv_2025              # switch mid-REPL
+```
+
+## Project Rules (AGENTS.md)
+
+LuckyD Code auto-loads `AGENTS.md`, `.clinerules`, `.goosehints`, and
+`CLAUDE.md` from your workspace into the system prompt.
 
 ## License
 

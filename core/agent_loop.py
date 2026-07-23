@@ -11,26 +11,29 @@ Replaces agent.py's run() method with a modular architecture using:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import traceback
-import asyncio
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
-from tools.registry import registry
+from config import PROJECT_DIR, get_config
+from llm import CostTracker
 from memory.store import get_memory
-from config import get_config, PROJECT_DIR
+from tools.registry import registry
 
-from .types import (
-    AgentEvent, AgentEventType, ToolStatus, CompactionStrategy,
-    AgentCallbacks, HookContext,
-)
+from .hooks import get_hooks
 from .llm_client import LLMClient
 from .message_builder import MessageBuilder
-from .context_manager import ContextManager
-from .hooks import get_hooks
-
-from typing import TYPE_CHECKING
+from .rules_loader import load_project_rules
+from .session_store import get_session_store
+from .types import (
+    AgentCallbacks,
+    AgentEvent,
+    AgentEventType,
+    HookContext,
+)
 
 if TYPE_CHECKING:
     from llm import LLMConfig
@@ -86,6 +89,9 @@ class CodingAgent:
         self.max_retries = 3
         self.base_delay = 1.0
 
+        # Cost tracking (for /cost, goodbye)
+        self._cost_tracker = CostTracker()
+
         # Memory refresh
         self._memory_refresh_interval = 3
         self._last_memory_refresh_turn = 0
@@ -93,7 +99,7 @@ class CodingAgent:
         self._last_extraction_msg_count = 0
 
         # Provider routing
-        from llm import ProviderRouter, LLMConfig
+        from llm import LLMConfig, ProviderRouter
         self._provider_config = LLMConfig(
             api_key=self.api_key, base_url=self.base_url,
             model=self.model, temperature=self.temperature,
@@ -146,7 +152,7 @@ class CodingAgent:
                  "google": "Google", "ollama": "Ollama"}
         return names.get(self._provider_config.provider, self._provider_config.provider)
 
-    def switch_provider(self, config: "LLMConfig") -> None:
+    def switch_provider(self, config: LLMConfig) -> None:
         """Switch the active LLM provider/model at runtime.
 
         Public API for model switching so callers (main.py, bridges) don't
@@ -164,13 +170,15 @@ class CodingAgent:
             self.callbacks.on_event(event)
 
     def _build_system(self) -> str:
-        """Build the system prompt with tools, project info, and memories."""
+        """Build the system prompt with tools, project info, memories, and rules."""
         tools_desc = registry.prompt_description()
+        rules = load_project_rules()
         return self.message_builder.build_system(
             provider_name=self.provider_name,
             model_name=self.model,
             tools_description=tools_desc,
             memory_context=self._memory_context,
+            project_rules=rules,
         )
 
     async def _execute_tool(self, tool_name: str, tool_args: dict) -> dict:
@@ -198,9 +206,7 @@ class CodingAgent:
         # Execute the tool
         try:
             clean_args = {k: v for k, v in tool_args.items() if not k.startswith("_")}
-            start_time = time.monotonic()
             result = await tool.execute(**clean_args)
-            elapsed = time.monotonic() - start_time
         except TypeError as e:
             result_text = f"Tool argument error: {e}\nExpected: {json.dumps(tool.parameters)}"
             return {"role": "tool", "tool_call_id": call_id, "content": result_text}
@@ -282,7 +288,7 @@ class CodingAgent:
                 tags = mem.get("tags", [])
                 memory.add(
                     content=f"[{category}] {mcontent}",
-                    tags=tags + ["extracted", category],
+                    tags=[*tags, "extracted", category],
                     source=f"auto-extract-{self.conversation_id}",
                 )
                 stored += 1
@@ -414,7 +420,13 @@ class CodingAgent:
                 except Exception:
                     pass
 
-            self.messages.append(assistant_msg.to_dict() if hasattr(assistant_msg, "to_dict") else assistant_msg)
+            # Track token usage for cost display
+            usage = assistant_msg.get("_usage", {}) if isinstance(assistant_msg, dict) else {}
+            if usage:
+                self._cost_tracker.add_usage(usage, self.model)
+            assistant_msg = assistant_msg.to_dict() if hasattr(assistant_msg, "to_dict") else assistant_msg
+
+            self.messages.append(assistant_msg)
             self._emit_event(AgentEventType.MODEL_RESPONSE, {
                 "has_content": bool(assistant_msg.get("content")),
                 "has_tool_calls": bool(assistant_msg.get("tool_calls")),
@@ -506,6 +518,33 @@ class CodingAgent:
         except Exception:
             pass
         return False
+
+    def save_session(self) -> str | None:
+        """Persist the current conversation to the session store.
+        Returns the file path, or None if no messages to save."""
+        if not self.messages:
+            return None
+        try:
+            store = get_session_store()
+            return str(store.save(
+                conversation_id=self.conversation_id,
+                messages=self.messages,
+                model=self.model,
+                provider=self.provider_name,
+                meta={"turn_count": self.turn_count},
+            ))
+        except Exception:
+            return None
+
+    def restore_session(self, session: dict) -> None:
+        """Restore messages and state from a saved session."""
+        if not session:
+            return
+        self.messages = session.get("messages", [])
+        self.conversation_id = session.get("conversation_id", self.conversation_id)
+        self.turn_count = session.get("meta", {}).get("turn_count", 0)
+        if session.get("model"):
+            self.model = session["model"]
 
     def reset(self):
         """Reset conversation state."""

@@ -6,13 +6,11 @@ Single source of truth for provider detection, credentials, and model resolution
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from pathlib import Path
-
+from dataclasses import dataclass
 
 # ── Provider constants ────────────────────────────────────────────────
 
-VALID_PROVIDERS = {"openai", "anthropic", "google", "ollama", "deepseek"}
+VALID_PROVIDERS = {"openai", "anthropic", "google", "ollama", "deepseek", "zai", "openrouter"}
 
 PROVIDER_NAMES = {
     "deepseek": "DeepSeek",
@@ -20,6 +18,8 @@ PROVIDER_NAMES = {
     "anthropic": "Anthropic",
     "google": "Google",
     "ollama": "Ollama",
+    "zai": "Z.ai (GLM)",
+    "openrouter": "OpenRouter",
 }
 
 PROVIDER_DEFAULTS = {
@@ -58,6 +58,20 @@ PROVIDER_DEFAULTS = {
         "default_base": "https://api.deepseek.com/v1",
         "default_model": "deepseek-chat",
     },
+    "zai": {
+        "env_key": "ZAI_API_KEY",
+        "env_base": "ZAI_BASE_URL",
+        "env_model": "ZAI_MODEL",
+        "default_base": "https://api.z.ai/api/paas/v4",
+        "default_model": "glm-4.5",
+    },
+    "openrouter": {
+        "env_key": "OPENROUTER_API_KEY",
+        "env_base": "OPENROUTER_BASE_URL",
+        "env_model": "OPENROUTER_MODEL",
+        "default_base": "https://openrouter.ai/api/v1",
+        "default_model": "deepseek/deepseek-chat-v3.1",
+    },
 }
 
 
@@ -89,6 +103,8 @@ def detect_provider() -> str | None:
         ("openai", "OPENAI_API_KEY"),
         ("anthropic", "ANTHROPIC_API_KEY"),
         ("google", "GOOGLE_API_KEY"),
+        ("zai", "ZAI_API_KEY"),
+        ("openrouter", "OPENROUTER_API_KEY"),
         ("ollama", "OLLAMA_MODEL"),
     ]
     for provider, env_var in checks:
@@ -166,5 +182,7 @@ def detect_api_format(provider: str) -> str:
         "google": "google",      # Google Generative AI
         "ollama": "openai",      # Ollama uses OpenAI-compatible
         "deepseek": "openai",    # DeepSeek uses OpenAI-compatible
+        "zai": "openai",         # Z.ai GLM uses OpenAI-compatible endpoint
+        "openrouter": "openai",  # OpenRouter uses OpenAI-compatible
     }
     return formats.get(provider, "openai")

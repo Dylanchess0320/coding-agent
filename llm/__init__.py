@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import os
-import json
-from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
-from typing import Callable
-
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 # ── Configuration ────────────────────────────────────────────────────
 
@@ -21,7 +19,7 @@ class LLMConfig:
     provider: str = "deepseek"
 
     @classmethod
-    def from_env(cls) -> "LLMConfig":
+    def from_env(cls) -> LLMConfig:
         """Auto-detect provider and config from environment variables."""
         # Check for explicit provider override
         explicit = os.environ.get("CODING_AGENT_PROVIDER", "").lower()
@@ -58,6 +56,24 @@ class LLMConfig:
                 base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
                 model=os.environ.get("OLLAMA_MODEL", "codellama"),
                 provider="ollama",
+                temperature=float(os.environ.get("CODING_AGENT_TEMP", "0.0")),
+                max_tokens=int(os.environ.get("CODING_AGENT_MAX_TOKENS", "8192")),
+            )
+        if explicit == "zai" or (not explicit and os.environ.get("ZAI_API_KEY")):
+            return cls(
+                api_key=os.environ["ZAI_API_KEY"],
+                base_url=os.environ.get("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4"),
+                model=os.environ.get("ZAI_MODEL", "glm-4.5"),
+                provider="zai",
+                temperature=float(os.environ.get("CODING_AGENT_TEMP", "0.0")),
+                max_tokens=int(os.environ.get("CODING_AGENT_MAX_TOKENS", "8192")),
+            )
+        if explicit == "openrouter" or (not explicit and os.environ.get("OPENROUTER_API_KEY")):
+            return cls(
+                api_key=os.environ["OPENROUTER_API_KEY"],
+                base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                model=os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3.1"),
+                provider="openrouter",
                 temperature=float(os.environ.get("CODING_AGENT_TEMP", "0.0")),
                 max_tokens=int(os.environ.get("CODING_AGENT_MAX_TOKENS", "8192")),
             )
@@ -120,6 +136,10 @@ MODEL_COSTS: dict[str, dict[str, float]] = {
     # Google
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
     "gemini-2.0-pro": {"input": 2.00, "output": 8.00},
+    # Z.ai GLM (reference, verify on-platform)
+    "glm-4.6": {"input": 0.60, "output": 2.20},
+    "glm-4.5": {"input": 0.60, "output": 2.20},
+    "glm-4.5-air": {"input": 0.20, "output": 1.10},
 }
 
 
@@ -186,7 +206,7 @@ class LLMClient(ABC):
         ...
 
     @staticmethod
-    def create(config: LLMConfig | None = None) -> "LLMClient":
+    def create(config: LLMConfig | None = None) -> LLMClient:
         """Factory: create the right client for the config."""
         if config is None:
             config = LLMConfig.from_env()
@@ -203,6 +223,9 @@ class LLMClient(ABC):
         elif config.provider == "ollama":
             from .ollama_client import OllamaClient
             return OllamaClient(config)
+        elif config.provider == "zai" or config.provider == "openrouter":
+            from .openai_client import OpenAIClient
+            return OpenAIClient(config)
         else:
             from .deepseek_client import DeepSeekClient
             return DeepSeekClient(config)

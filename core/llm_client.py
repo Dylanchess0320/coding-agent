@@ -5,10 +5,11 @@ Handles HTTP transport, streaming, retries, and provider routing.
 
 from __future__ import annotations
 
-import json
 import asyncio
+import json
+from collections.abc import Callable
+
 import httpx
-from typing import Callable
 
 from .context_manager import ContextManager
 
@@ -86,6 +87,8 @@ class LLMClient:
             "temperature": self.temperature, "max_tokens": self.max_tokens,
             "tools": tools or [], "tool_choice": "auto", "stream": stream,
         }
+        if stream:
+            payload["stream_options"] = {"include_usage": True}
         if "pro" in self.model.lower() or "reasoner" in self.model.lower():
             payload["thinking"] = {"type": "enabled"}
             payload["reasoning_effort"] = "high"
@@ -101,21 +104,24 @@ class LLMClient:
     async def _try_stream(self, payload, url, headers, attempt, stream_callback, think_callback) -> dict | None:
         """Execute one streaming attempt."""
         timeout = httpx.Timeout(connect=30.0, read=self.timeout_sec, write=30.0, pool=30.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as resp:
-                if resp.status_code in self.retryable_codes and attempt < self.max_retries:
-                    delay = self.base_delay * (2 ** attempt)
-                    print(f"\n  [RETRY] HTTP {resp.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
-                    await asyncio.sleep(delay)
-                    raise httpx.HTTPStatusError(f"Retryable {resp.status_code}", request=resp.request, response=resp)
-                resp.raise_for_status()
-                return await self._read_stream(resp, stream_callback, think_callback)
+        async with (
+            httpx.AsyncClient(timeout=timeout) as client,
+            client.stream("POST", url, headers=headers, json=payload) as resp,
+        ):
+            if resp.status_code in self.retryable_codes and attempt < self.max_retries:
+                delay = self.base_delay * (2 ** attempt)
+                print(f"\n  [RETRY] HTTP {resp.status_code} in {delay:.1f}s ({attempt + 2}/{self.max_retries + 1})")
+                await asyncio.sleep(delay)
+                raise httpx.HTTPStatusError(f"Retryable {resp.status_code}", request=resp.request, response=resp)
+            resp.raise_for_status()
+            return await self._read_stream(resp, stream_callback, think_callback)
 
     async def _read_stream(self, resp, stream_callback, think_callback) -> dict | None:
-        """Read and parse a streaming response."""
+        """Read and parse a streaming response, capturing usage."""
         content_chunks: list[str] = []
         reasoning_chunks: list[str] = []
         tool_calls_map: dict[int, dict] = {}
+        usage: dict = {}
         async for line in resp.aiter_lines():
             if not line or not line.startswith("data: "):
                 continue
@@ -126,6 +132,9 @@ class LLMClient:
                 chunk = json.loads(data_str)
             except json.JSONDecodeError:
                 continue
+            # Capture usage from any chunk (final chunk with include_usage)
+            if chunk.get("usage"):
+                usage = chunk["usage"]
             choices = chunk.get("choices", [])
             if not choices:
                 continue
@@ -144,14 +153,17 @@ class LLMClient:
                 idx = tc.get("index", 0)
                 if idx not in tool_calls_map:
                     tool_calls_map[idx] = {"id": "", "name": "", "arguments": ""}
-                if "id" in tc and tc["id"]:
+                if tc.get("id"):
                     tool_calls_map[idx]["id"] = tc["id"]
                 func = tc.get("function", {})
                 if "name" in func:
                     tool_calls_map[idx]["name"] += func["name"]
                 if "arguments" in func:
                     tool_calls_map[idx]["arguments"] += func["arguments"]
-        return self._assemble_message(content_chunks, reasoning_chunks, tool_calls_map)
+        msg = self._assemble_message(content_chunks, reasoning_chunks, tool_calls_map)
+        if usage:
+            msg["_usage"] = usage
+        return msg
 
     @staticmethod
     def _assemble_message(content_chunks, reasoning_chunks, tool_calls_map) -> dict:
@@ -196,6 +208,10 @@ class LLMClient:
             content = msg.get("content", "")
             if content and stream_callback:
                 stream_callback(content)
+            # Attach usage for cost tracking
+            usage = data.get("usage", {})
+            if usage:
+                msg["_usage"] = usage
             return msg
         except Exception as e:
             print(f"\n  [ERR] Non-streaming fallback also failed: {e}")

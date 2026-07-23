@@ -10,12 +10,11 @@ Usage:
 
 from __future__ import annotations
 
-import os
-import sys
 import json
+import os
 import tempfile
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import AsyncGenerator, Generator
 
 import pytest
 
@@ -32,6 +31,8 @@ def _mock_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-fake-key")
         monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+        monkeypatch.setenv("ZAI_API_KEY", "sk-test-zai-key")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter-key")
         monkeypatch.setenv("CODING_AGENT_LOG_LEVEL", "CRITICAL")
 
 

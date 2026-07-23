@@ -4,6 +4,7 @@ Terminal UI — clean LuckyD Code design with Rich or ANSI fallback.
 
 from __future__ import annotations
 
+import contextlib
 import platform
 import re
 import shutil
@@ -84,7 +85,7 @@ class TerminalUI:
             else None
         )
         self._stream_buffer = ""
-        self._live: "Live | None" = None
+        self._live: Live | None = None
         self._streaming = False
         self._thinking = False
         self._think_buffer = ""
@@ -262,7 +263,7 @@ class TerminalUI:
         # Keep panel compact — show a short tail only
         preview = self._think_buffer[-400:]
         if self.rich and self._live:
-            try:
+            with contextlib.suppress(Exception):
                 self._live.update(
                     Panel(
                         Text(preview, style=BRAND["muted"]),
@@ -272,8 +273,6 @@ class TerminalUI:
                         padding=(0, 1),
                     )
                 )
-            except Exception:
-                pass
         elif not self.rich:
             sys.stdout.write(f"{ANSI['dim']}{token}{ANSI['reset']}")
             sys.stdout.flush()
@@ -459,6 +458,12 @@ class TerminalUI:
             ("/model", "Show or switch model"),
             ("/refresh", "Refresh model cache"),
             ("/save", "Save conversation to JSON"),
+            ("/cost", "Show token usage and cost"),
+            ("/undo", "Undo last file change"),
+            ("/sessions", "List saved sessions"),
+            ("/resume", "Resume a saved session"),
+            ("/mcp", "Show MCP server status"),
+            ("/version", "Show version"),
             ("/quit", "Exit"),
         ]
         if self.rich:

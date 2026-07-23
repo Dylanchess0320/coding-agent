@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 DEFAULT_SYSTEM_PROMPT = """You are LuckyD Code, an AI coding assistant in a terminal.
 
 Answer concisely. For code: use Bash/Read/Write/Edit/Glob/Grep tools. For questions: answer directly.
@@ -49,8 +48,8 @@ class MessageBuilder:
     def _try_load_project_info(self):
         """Auto-detect project information on startup."""
         try:
-            from project import ProjectDetector
             from config import PROJECT_DIR
+            from project import ProjectDetector
             detector = ProjectDetector()
             self._project_info = detector.detect(PROJECT_DIR)
         except Exception:
@@ -62,8 +61,9 @@ class MessageBuilder:
         model_name: str,
         tools_description: str,
         memory_context: str | None = None,
+        project_rules: str | None = None,
     ) -> str:
-        """Build the full system prompt with tool descriptions and context."""
+        """Build the full system prompt with tools, context, memories, and rules."""
         cwd = str(Path.cwd())
         base = DEFAULT_SYSTEM_PROMPT.format(cwd=cwd) + f"\nAvailable tools:\n{tools_description}"
 
@@ -72,6 +72,10 @@ class MessageBuilder:
             base += "\n\n## Project Context\n" + self._project_info.to_prompt()
 
         base += f"\n\n## Model\nProvider: {provider_name} | Model: {model_name}"
+
+        # Inject project rules (AGENTS.md etc.)
+        if project_rules:
+            base += "\n\n" + project_rules
 
         # Inject memories
         if memory_context:
