@@ -3,6 +3,7 @@ Sandboxed command execution for Windows.
 Guards against destructive operations — the heart of principle #3.
 """
 
+import platform
 import re
 import subprocess
 from typing import NamedTuple
@@ -121,9 +122,14 @@ def execute(command: str, cwd: str | None = None, timeout: int | None = None) ->
     start = time.time()
 
     try:
-        # Use PowerShell on Windows for better compatibility
+        # Use the native shell: PowerShell on Windows, bash on Linux/macOS
+        if platform.system() == "Windows":
+            shell_cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command]
+        else:
+            shell_cmd = ["bash", "-c", command]
+
         proc = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+            shell_cmd,
             cwd=cwd,
             capture_output=True,
             text=True,
