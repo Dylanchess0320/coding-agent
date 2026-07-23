@@ -73,3 +73,7 @@ log/
 /_diag_*.txt
 nul
 installers/
+
+# Local-only artifacts (kept on disk, not in repo)
+luckyd-code.exe
+Switch-ClineAccount.bat
